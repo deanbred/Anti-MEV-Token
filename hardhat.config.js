@@ -1,4 +1,8 @@
 require("@nomicfoundation/hardhat-toolbox")
+require("@nomiclabs/hardhat-etherscan")
+require("@nomiclabs/hardhat-ethers")
+require("hardhat-gas-reporter")
+require("hardhat-deploy")
 require("dotenv").config()
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -22,12 +26,19 @@ module.exports = {
       saveDeployments: true,
       chainId: 1,
     },
-    eth_dev: {
-      url: process.env.ETH_DEV_RPC,
+    sepolia: {
+      url: process.env.SEPOLIA_RPC,
       accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
       saveDeployments: true,
       chainId: 11155111,
-      gasPrice: 5000000000,
+      gasprice: 3000000,
+    },
+    goerli: {
+      url: process.env.GOERLI_RPC,
+      accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
+      saveDeployments: true,
+      chainId: 5,
+      gasprice: 3000000,
     },
     arb_dev: {
       url: process.env.ARB_DEV_RPC,

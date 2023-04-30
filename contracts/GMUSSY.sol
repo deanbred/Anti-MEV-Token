@@ -226,7 +226,6 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
   mapping(address => mapping(address => uint256)) private _allowances;
 
   uint256 private _totalSupply;
-
   string private _name;
   string private _symbol;
 
@@ -594,8 +593,8 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 }
 
 interface IUniswapV2Pair {
-  event Approval(address indexed owner, address indexed spender, uint value);
-  event Transfer(address indexed from, address indexed to, uint value);
+  event Approval(address indexed owner, address indexed spender, uint256 value);
+  event Transfer(address indexed from, address indexed to, uint256 value);
 
   function name() external pure returns (string memory);
 
@@ -603,59 +602,59 @@ interface IUniswapV2Pair {
 
   function decimals() external pure returns (uint8);
 
-  function totalSupply() external view returns (uint);
+  function totalSupply() external view returns (uint256);
 
-  function balanceOf(address owner) external view returns (uint);
+  function balanceOf(address owner) external view returns (uint256);
 
   function allowance(
     address owner,
     address spender
-  ) external view returns (uint);
+  ) external view returns (uint256);
 
-  function approve(address spender, uint value) external returns (bool);
+  function approve(address spender, uint256 value) external returns (bool);
 
-  function transfer(address to, uint value) external returns (bool);
+  function transfer(address to, uint256 value) external returns (bool);
 
   function transferFrom(
     address from,
     address to,
-    uint value
+    uint256 value
   ) external returns (bool);
 
   function DOMAIN_SEPARATOR() external view returns (bytes32);
 
   function PERMIT_TYPEHASH() external pure returns (bytes32);
 
-  function nonces(address owner) external view returns (uint);
+  function nonces(address owner) external view returns (uint256);
 
   function permit(
     address owner,
     address spender,
-    uint value,
-    uint deadline,
+    uint256 value,
+    uint256 deadline,
     uint8 v,
     bytes32 r,
     bytes32 s
   ) external;
 
-  event Mint(address indexed sender, uint amount0, uint amount1);
+  event Mint(address indexed sender, uint256 amount0, uint256 amount1);
   event Burn(
     address indexed sender,
-    uint amount0,
-    uint amount1,
+    uint256 amount0,
+    uint256 amount1,
     address indexed to
   );
   event Swap(
     address indexed sender,
-    uint amount0In,
-    uint amount1In,
-    uint amount0Out,
-    uint amount1Out,
+    uint256 amount0In,
+    uint256 amount1In,
+    uint256 amount0Out,
+    uint256 amount1Out,
     address indexed to
   );
   event Sync(uint112 reserve0, uint112 reserve1);
 
-  function MINIMUM_LIQUIDITY() external pure returns (uint);
+  function MINIMUM_LIQUIDITY() external pure returns (uint256);
 
   function factory() external view returns (address);
 
@@ -668,19 +667,19 @@ interface IUniswapV2Pair {
     view
     returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast);
 
-  function price0CumulativeLast() external view returns (uint);
+  function price0CumulativeLast() external view returns (uint256);
 
-  function price1CumulativeLast() external view returns (uint);
+  function price1CumulativeLast() external view returns (uint256);
 
-  function kLast() external view returns (uint);
+  function kLast() external view returns (uint256);
 
-  function mint(address to) external returns (uint liquidity);
+  function mint(address to) external returns (uint256 liquidity);
 
-  function burn(address to) external returns (uint amount0, uint amount1);
+  function burn(address to) external returns (uint256 amount0, uint256 amount1);
 
   function swap(
-    uint amount0Out,
-    uint amount1Out,
+    uint256 amount0Out,
+    uint256 amount1Out,
     address to,
     bytes calldata data
   ) external;
@@ -700,191 +699,194 @@ interface IUniswapV2Router01 {
   function addLiquidity(
     address tokenA,
     address tokenB,
-    uint amountADesired,
-    uint amountBDesired,
-    uint amountAMin,
-    uint amountBMin,
+    uint256 amountADesired,
+    uint256 amountBDesired,
+    uint256 amountAMin,
+    uint256 amountBMin,
     address to,
-    uint deadline
-  ) external returns (uint amountA, uint amountB, uint liquidity);
+    uint256 deadline
+  ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 
   function addLiquidityETH(
     address token,
-    uint amountTokenDesired,
-    uint amountTokenMin,
-    uint amountETHMin,
+    uint256 amountTokenDesired,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
     address to,
-    uint deadline
-  ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
+    uint256 deadline
+  )
+    external
+    payable
+    returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 
   function removeLiquidity(
     address tokenA,
     address tokenB,
-    uint liquidity,
-    uint amountAMin,
-    uint amountBMin,
+    uint256 liquidity,
+    uint256 amountAMin,
+    uint256 amountBMin,
     address to,
-    uint deadline
-  ) external returns (uint amountA, uint amountB);
+    uint256 deadline
+  ) external returns (uint256 amountA, uint256 amountB);
 
   function removeLiquidityETH(
     address token,
-    uint liquidity,
-    uint amountTokenMin,
-    uint amountETHMin,
+    uint256 liquidity,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
     address to,
-    uint deadline
-  ) external returns (uint amountToken, uint amountETH);
+    uint256 deadline
+  ) external returns (uint256 amountToken, uint256 amountETH);
 
   function removeLiquidityWithPermit(
     address tokenA,
     address tokenB,
-    uint liquidity,
-    uint amountAMin,
-    uint amountBMin,
+    uint256 liquidity,
+    uint256 amountAMin,
+    uint256 amountBMin,
     address to,
-    uint deadline,
+    uint256 deadline,
     bool approveMax,
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) external returns (uint amountA, uint amountB);
+  ) external returns (uint256 amountA, uint256 amountB);
 
   function removeLiquidityETHWithPermit(
     address token,
-    uint liquidity,
-    uint amountTokenMin,
-    uint amountETHMin,
+    uint256 liquidity,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
     address to,
-    uint deadline,
+    uint256 deadline,
     bool approveMax,
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) external returns (uint amountToken, uint amountETH);
+  ) external returns (uint256 amountToken, uint256 amountETH);
 
   function swapExactTokensForTokens(
-    uint amountIn,
-    uint amountOutMin,
+    uint256 amountIn,
+    uint256 amountOutMin,
     address[] calldata path,
     address to,
-    uint deadline
-  ) external returns (uint[] memory amounts);
+    uint256 deadline
+  ) external returns (uint256[] memory amounts);
 
   function swapTokensForExactTokens(
-    uint amountOut,
-    uint amountInMax,
+    uint256 amountOut,
+    uint256 amountInMax,
     address[] calldata path,
     address to,
-    uint deadline
-  ) external returns (uint[] memory amounts);
+    uint256 deadline
+  ) external returns (uint256[] memory amounts);
 
   function swapExactETHForTokens(
-    uint amountOutMin,
+    uint256 amountOutMin,
     address[] calldata path,
     address to,
-    uint deadline
-  ) external payable returns (uint[] memory amounts);
+    uint256 deadline
+  ) external payable returns (uint256[] memory amounts);
 
   function swapTokensForExactETH(
-    uint amountOut,
-    uint amountInMax,
+    uint256 amountOut,
+    uint256 amountInMax,
     address[] calldata path,
     address to,
-    uint deadline
-  ) external returns (uint[] memory amounts);
+    uint256 deadline
+  ) external returns (uint256[] memory amounts);
 
   function swapExactTokensForETH(
-    uint amountIn,
-    uint amountOutMin,
+    uint256 amountIn,
+    uint256 amountOutMin,
     address[] calldata path,
     address to,
-    uint deadline
-  ) external returns (uint[] memory amounts);
+    uint256 deadline
+  ) external returns (uint256[] memory amounts);
 
   function swapETHForExactTokens(
-    uint amountOut,
+    uint256 amountOut,
     address[] calldata path,
     address to,
-    uint deadline
-  ) external payable returns (uint[] memory amounts);
+    uint256 deadline
+  ) external payable returns (uint256[] memory amounts);
 
   function quote(
-    uint amountA,
-    uint reserveA,
-    uint reserveB
-  ) external pure returns (uint amountB);
+    uint256 amountA,
+    uint256 reserveA,
+    uint256 reserveB
+  ) external pure returns (uint256 amountB);
 
   function getAmountOut(
-    uint amountIn,
-    uint reserveIn,
-    uint reserveOut
-  ) external pure returns (uint amountOut);
+    uint256 amountIn,
+    uint256 reserveIn,
+    uint256 reserveOut
+  ) external pure returns (uint256 amountOut);
 
   function getAmountIn(
-    uint amountOut,
-    uint reserveIn,
-    uint reserveOut
-  ) external pure returns (uint amountIn);
+    uint256 amountOut,
+    uint256 reserveIn,
+    uint256 reserveOut
+  ) external pure returns (uint256 amountIn);
 
   function getAmountsOut(
-    uint amountIn,
+    uint256 amountIn,
     address[] calldata path
-  ) external view returns (uint[] memory amounts);
+  ) external view returns (uint256[] memory amounts);
 
   function getAmountsIn(
-    uint amountOut,
+    uint256 amountOut,
     address[] calldata path
-  ) external view returns (uint[] memory amounts);
+  ) external view returns (uint256[] memory amounts);
 }
 
 interface IUniswapV2Router02 is IUniswapV2Router01 {
   function removeLiquidityETHSupportingFeeOnTransferTokens(
     address token,
-    uint liquidity,
-    uint amountTokenMin,
-    uint amountETHMin,
+    uint256 liquidity,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
     address to,
-    uint deadline
-  ) external returns (uint amountETH);
+    uint256 deadline
+  ) external returns (uint256 amountETH);
 
   function removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(
     address token,
-    uint liquidity,
-    uint amountTokenMin,
-    uint amountETHMin,
+    uint256 liquidity,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
     address to,
-    uint deadline,
+    uint256 deadline,
     bool approveMax,
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) external returns (uint amountETH);
+  ) external returns (uint256 amountETH);
 
   function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-    uint amountIn,
-    uint amountOutMin,
+    uint256 amountIn,
+    uint256 amountOutMin,
     address[] calldata path,
     address to,
-    uint deadline
+    uint256 deadline
   ) external;
 
   function swapExactETHForTokensSupportingFeeOnTransferTokens(
-    uint amountOutMin,
+    uint256 amountOutMin,
     address[] calldata path,
     address to,
-    uint deadline
+    uint256 deadline
   ) external payable;
 
   function swapExactTokensForETHSupportingFeeOnTransferTokens(
-    uint amountIn,
-    uint amountOutMin,
+    uint256 amountIn,
+    uint256 amountOutMin,
     address[] calldata path,
     address to,
-    uint deadline
+    uint256 deadline
   ) external;
 
-  function WETH() external pure returns (address);
+  function WETH() external pure override returns (address);
 }
 
 interface IUniswapV2Factory {
@@ -892,7 +894,7 @@ interface IUniswapV2Factory {
     address indexed token0,
     address indexed token1,
     address pair,
-    uint
+    uint256
   );
 
   function feeTo() external view returns (address);
@@ -904,9 +906,9 @@ interface IUniswapV2Factory {
     address tokenB
   ) external view returns (address pair);
 
-  function allPairs(uint) external view returns (address pair);
+  function allPairs(uint256) external view returns (address pair);
 
-  function allPairsLength() external view returns (uint);
+  function allPairsLength() external view returns (uint256);
 
   function createPair(
     address tokenA,
@@ -921,37 +923,29 @@ interface IUniswapV2Factory {
 contract GMUSSY is ERC20, Ownable {
   using SafeMath for uint256;
 
-  address private teamWallet;
-  IUniswapV2Router02 public immutable uniswapV2Router;
-  address public immutable uniswapV2Pair;
+  IUniswapV2Router02 public uniswapV2Router;
+  address public uniswapV2Pair;
 
-  uint256 private constant _supply = 777777777 * 1e18;
+  uint256 private constant _supply = 77777777777 * 1e18;
   uint256 public _maxTxAmount = SafeMath.div(_supply, 100);
   uint256 public _maxWalletSize = SafeMath.div(_supply, 100);
-  uint256 private constant _buyTax = 5;
-  uint256 private constant _sellTax = 5;
+  uint256 private _buyTax = 4;
+  uint256 private _sellTax = 4;
+  address payable private _teamWallet;
 
-  constructor(
-    address _teamWallet,
-    address _uniswapV2Router
-  ) ERC20("GMUSSY", "GMUSSY") {
-    require(_teamWallet != address(0), "Invalid team wallet address");
-    require(
-      _uniswapV2Router != address(0),
-      "Invalid Uniswap V2 Router address"
+  constructor(uint256 initialSupply) ERC20("GMUSSY", "GMUSSY") {
+    _teamWallet = payable(0x8ee9B41620d01dAF068019fEE95D3aC855648B50);
+
+    IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
+      0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
     );
-
-    teamWallet = _teamWallet;
-    uniswapV2Router = IUniswapV2Router02(_uniswapV2Router);
-
-    // Create a Uniswap V2 pair for this token
-    uniswapV2Pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(
+    uniswapV2Router = _uniswapV2Router;
+    uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(
       address(this),
-      uniswapV2Router.WETH()
+      _uniswapV2Router.WETH()
     );
 
-    // Mint initial supply
-    _mint(msg.sender, _supply);
+    _mint(msg.sender, initialSupply);
   }
 
   function _transfer(
@@ -960,18 +954,63 @@ contract GMUSSY is ERC20, Ownable {
     uint256 amount
   ) internal override {
     uint256 tax = 0;
+    require(amount <= _maxTxAmount, "TOKEN: Max Transaction Limit");
+    require(
+      balanceOf(recipient) + amount < _maxWalletSize,
+      "TOKEN: Max Wallet Size"
+    );
     if (sender == uniswapV2Pair) {
-      // Buy tax
-      tax = (amount * _buyTax) / 100;
-      super._transfer(sender, address(this), tax); // Transfer buy tax to the contract
-      super._transfer(address(this), uniswapV2Pair, tax); // Add buy tax to the Uniswap V2 liquidity pool
+      tax = amount.mul(_buyTax).div(100);
+      super._transfer(sender, address(this), tax);
+      super._transfer(address(this), uniswapV2Pair, tax);
+
     } else if (recipient == uniswapV2Pair) {
-      // Sell tax
-      tax = (amount * _sellTax) / 100;
-      super._transfer(sender, teamWallet, tax); // Transfer sell tax to the team wallet
+      tax = amount.mul(_sellTax).div(100);
+      super._transfer(sender, _teamWallet, tax);
+      
+    } else if (
+      sender == owner() ||
+      recipient == owner() ||
+      sender == _teamWallet ||
+      recipient == _teamWallet
+    ) {
+      super._transfer(sender, recipient, amount);
     }
 
-    // Transfer the remaining amount
     super._transfer(sender, recipient, amount - tax);
+  }
+
+  function swapTokensForEth(uint256 tokenAmount) private {
+    address[] memory path = new address[](2);
+    path[0] = address(this);
+    path[1] = uniswapV2Router.WETH();
+    _approve(address(this), address(uniswapV2Router), tokenAmount);
+    uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+      tokenAmount,
+      0,
+      path,
+      address(this),
+      block.timestamp
+    );
+  }
+
+  function setMaxTxnAmount(uint256 maxTxAmount) public onlyOwner {
+    _maxTxAmount = maxTxAmount;
+  }
+
+  function setMaxWalletSize(uint256 maxWalletSize) public onlyOwner {
+    _maxWalletSize = maxWalletSize;
+  }
+
+  function setBuyTax(uint256 buyTax) public onlyOwner {
+    _buyTax = buyTax;
+  }
+
+  function setSellTax(uint256 sellTax) public onlyOwner {
+    _sellTax = sellTax;
+  }
+
+  function setTeamWallet(address teamWallet) public onlyOwner {
+    _teamWallet = payable(teamWallet);
   }
 }
