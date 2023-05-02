@@ -932,6 +932,7 @@ contract GMUSSY is ERC20, Ownable {
   uint256 private _buyTax = 4;
   uint256 private _sellTax = 4;
   address payable private _teamWallet;
+  bool public _tradingOpen = false;
 
   constructor(uint256 initialSupply) ERC20("GMUSSY", "GMUSSY") {
     _teamWallet = payable(0x8ee9B41620d01dAF068019fEE95D3aC855648B50);
@@ -954,6 +955,7 @@ contract GMUSSY is ERC20, Ownable {
     uint256 amount
   ) internal override {
     uint256 tax = 0;
+    require(_tradingOpen == true);
     require(amount <= _maxTxAmount, "TOKEN: Max Transaction Limit");
     require(
       balanceOf(recipient) + amount < _maxWalletSize,
@@ -963,11 +965,9 @@ contract GMUSSY is ERC20, Ownable {
       tax = amount.mul(_buyTax).div(100);
       super._transfer(sender, address(this), tax);
       super._transfer(address(this), uniswapV2Pair, tax);
-
     } else if (recipient == uniswapV2Pair) {
       tax = amount.mul(_sellTax).div(100);
       super._transfer(sender, _teamWallet, tax);
-      
     } else if (
       sender == owner() ||
       recipient == owner() ||
@@ -978,6 +978,18 @@ contract GMUSSY is ERC20, Ownable {
     }
 
     super._transfer(sender, recipient, amount - tax);
+  }
+
+  function getUniswapV2Pair() public view returns (address) {
+    return uniswapV2Pair;
+  }
+
+  function enableTrading() public onlyOwner {
+    _tradingOpen = true;
+  }
+
+  function disableTrading() public onlyOwner {
+    _tradingOpen = false;
   }
 
   function swapTokensForEth(uint256 tokenAmount) private {
@@ -1010,7 +1022,7 @@ contract GMUSSY is ERC20, Ownable {
     _sellTax = sellTax;
   }
 
-  function setTeamWallet(address teamWallet) public onlyOwner {
+  function setTeamWallet(address teamWallet) private onlyOwner {
     _teamWallet = payable(teamWallet);
   }
 }

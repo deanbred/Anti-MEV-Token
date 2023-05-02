@@ -6,6 +6,11 @@
   "repository": "https://github.com/deanbred/gmussy-token.git",
   "author": "deanbred",
   "license": "MIT",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy": "hardhat deploy"
+  },
   "devDependencies": {
     "@ethersproject/abi": "^5.4.7",
     "@ethersproject/bytes": "^5.7.0",
