@@ -8,12 +8,11 @@ const {
 !developmentChains.includes(network.name)
   ? describe.skip
   : describe("GMUSSY Token Unit Test", function () {
-      let ourToken, deployer, user1, user2, devWallet
+      let ourToken, deployer, user1, devWallet
       beforeEach(async function () {
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
         user1 = accounts.user1
-        user2 = accounts.user2
 
         await deployments.fixture("all")
         ourToken = await hre.ethers.getContract("GMUSSY", deployer)
@@ -43,11 +42,18 @@ const {
       })
       describe("Transfers", () => {
         const tokensToSend = ethers.utils.parseEther("1")
-        const tokensReceived = tokensToSend.mul(96).div(100)
+        const tokensReceived = tokensToSend.mul(97).div(100)
 
         it("Should be able to transfer tokens successfully to an address", async () => {
+          const startBalance = await ourToken.balanceOf(user1)
+          console.log(`* startBalance: ${startBalance}`)
+
           await ourToken.transfer(user1, tokensToSend)
-          //expect(await ourToken.balanceOf(user1)).to.equal(tokensReceived)
+
+          const endBalance = await ourToken.balanceOf(user1)
+          console.log(`* endBalance: ${endBalance}`)
+
+          expect(await ourToken.balanceOf(user1)).to.equal(tokensReceived)
           console.log(`* tokensToSend: ${tokensToSend}`)
           console.log(`* tokensReceived: ${tokensReceived}`)
         })
@@ -60,7 +66,6 @@ const {
       })
       describe("Allowances", () => {
         const tokensToSpend = ethers.utils.parseEther("1")
-        const tokensReceived = tokensToSpend.mul(96).div(100)
         const overDraft = ethers.utils.parseEther("1.1")
 
         beforeEach(async () => {
@@ -68,6 +73,9 @@ const {
         })
         it("Should approve other address to spend token", async () => {
           await ourToken.approve(user1, tokensToSpend)
+          const allowance = await ourToken.allowance(deployer, user1)
+          console.log(`* Allowance from contract: ${allowance}`)
+
           await playerToken.transferFrom(deployer, user1, tokensToSpend)
 
           expect(await playerToken.balanceOf(user1)).to.equal(tokensToSpend)
@@ -76,7 +84,7 @@ const {
         it("Doesn't allow an unnaproved member to do transfers", async () => {
           await expect(
             playerToken.transferFrom(deployer, user1, tokensToSpend)
-          ).to.be.revertedWith("ERC20: insufficient allowance")
+          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
         })
         it("Emits an approval event when an approval occurs", async () => {
           await expect(ourToken.approve(user1, tokensToSpend)).to.emit(
@@ -95,7 +103,7 @@ const {
           await ourToken.approve(user1, tokensToSpend)
           await expect(
             playerToken.transferFrom(deployer, user1, overDraft)
-          ).to.be.revertedWith("ERC20: insufficient allowance")
+          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
         })
       })
     })

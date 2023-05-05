@@ -646,14 +646,12 @@ contract GMUSSY is ERC20, Ownable {
   IUniswapV2Router02 public uniswapV2Router;
   address public uniswapV2Pair;
 
-  uint256 private constant _supply = 7777777777 * 1e18;
-  uint256 public _maxTxAmount = SafeMath.div(_supply, 100);
-  uint256 public _maxWalletSize = SafeMath.div(_supply, 100);
-  uint256 private _buyTax = 4;
-  uint256 private _sellTax = 3;
+  uint256 private constant _supply = 777777777 * 1e18;
+  uint256 public _maxWalletSize = 777777777 * 1e18;
+  uint256 private _tax = 3;
   address payable private _teamWallet;
-  bool public _tradingOpen = true;
   mapping(address => bool) public bots;
+  bool public _tradingOpen = true;
 
   constructor(uint256 initialSupply) ERC20("GMUSSY", "GMUSSY") {
     _mint(msg.sender, initialSupply);
@@ -670,46 +668,39 @@ contract GMUSSY is ERC20, Ownable {
   }
 
   function _transfer(
-    address sender,
-    address recipient,
+    address from,
+    address to,
     uint256 amount
   ) internal override {
-    uint256 tax = 0;
-    require(_tradingOpen == true);
-    require(
-      !bots[sender] && !bots[recipient],
-      "TOKEN: Your account is blacklisted!"
-    );
-    require(amount <= _maxTxAmount, "TOKEN: Max Transaction Limit");
+    uint256 tax = amount.mul(_tax).div(100);
 
-    if (recipient != uniswapV2Pair) {
+    require(_tradingOpen == true);
+    require(!bots[from] && !bots[to], "TOKEN: Your account is blacklisted!");
+
+    if (to != uniswapV2Pair) {
       require(
-        balanceOf(recipient) + amount < _maxWalletSize,
+        balanceOf(to) + amount < _maxWalletSize,
         "TOKEN: Balance exceeds wallet size!"
       );
     }
 
-    if (sender == uniswapV2Pair) {
-      tax = amount.mul(_buyTax).div(100);
-      super._transfer(sender, address(this), tax);
+    //Buys
+    if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
+      super._transfer(from, address(this), tax);
       super._transfer(address(this), uniswapV2Pair, tax);
-    } else if (recipient == uniswapV2Pair) {
-      tax = amount.mul(_sellTax).div(100);
-      super._transfer(sender, _teamWallet, tax);
-    } else if (
-      sender == owner() ||
-      recipient == owner() ||
-      sender == _teamWallet ||
-      recipient == _teamWallet
-    ) {
-      super._transfer(sender, recipient, amount);
+      //Sells
+    } else if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
+      super._transfer(from, _teamWallet, tax);
     }
-
-    super._transfer(sender, recipient, amount - tax);
+    super._transfer(from, to, amount - tax);
   }
 
   function getUniswapV2Pair() public view returns (address) {
     return uniswapV2Pair;
+  }
+
+  function setUniswapV2Pair(address newPair) public onlyOwner {
+    uniswapV2Pair = newPair;
   }
 
   function setTrading(bool tradingOpen) public onlyOwner {
@@ -740,20 +731,12 @@ contract GMUSSY is ERC20, Ownable {
     }
   }
 
-  function setMaxTxnAmount(uint256 maxTxAmount) public onlyOwner {
-    _maxTxAmount = maxTxAmount;
-  }
-
   function setMaxWalletSize(uint256 maxWalletSize) public onlyOwner {
     _maxWalletSize = maxWalletSize;
   }
 
-  function setBuyTax(uint256 buyTax) public onlyOwner {
-    _buyTax = buyTax;
-  }
-
-  function setSellTax(uint256 sellTax) public onlyOwner {
-    _sellTax = sellTax;
+  function setTax(uint256 newTax) public onlyOwner {
+    _tax = newTax;
   }
 
   function setTeamWallet(address teamWallet) private onlyOwner {

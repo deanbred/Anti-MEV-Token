@@ -14,8 +14,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     args: [INITIAL_SUPPLY],
     log: true,
     waitConfirmations: network.config.blockConfirmations || 1,
-    gasLimit: 10000000,
-    gasprice: 30000000,
+    gasLimit: 6000000,
+    gasprice: 300000,
   })
   log(`Initial Supply: ${INITIAL_SUPPLY}`)
 
