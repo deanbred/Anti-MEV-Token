@@ -8,7 +8,8 @@ const networkConfig = {
     ethUsdPriceFeed: "0x694AA1769357215DE4FAC081bf1f309aDC325306",
   },
 }
-const INITIAL_SUPPLY = ethers.BigNumber.from("777777777000000000000000000")
+// Fibonacci Sequence 1.12 Billion tokens
+const INITIAL_SUPPLY = ethers.BigNumber.from("1123581321000000000000000000")
 
 const developmentChains = [
   "hardhat",

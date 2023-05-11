@@ -46,12 +46,20 @@ const {
 
         it("Should be able to transfer tokens successfully to an address", async () => {
           const startBalance = await ourToken.balanceOf(user1)
+          const teamBalance = await ourToken.balanceOf(
+            "0x5F793b98817ae4609ad2C3c4D7171518E555ABA3"
+          )
           console.log(`* startBalance: ${startBalance}`)
+          console.log(`* teamBalance: ${teamBalance}`)
 
           await ourToken.transfer(user1, tokensToSend)
 
           const endBalance = await ourToken.balanceOf(user1)
+          const endTeamBalance = await ourToken.balanceOf(
+            "0x5F793b98817ae4609ad2C3c4D7171518E555ABA3"
+          )
           console.log(`* endBalance: ${endBalance}`)
+          console.log(`* endTeamBalance: ${endTeamBalance}`)
 
           expect(await ourToken.balanceOf(user1)).to.equal(tokensReceived)
           console.log(`* tokensToSend: ${tokensToSend}`)
@@ -71,6 +79,12 @@ const {
         beforeEach(async () => {
           playerToken = await ethers.getContract("GMUSSY", user1)
         })
+        it("Allowance is accurately being set", async () => {
+          await ourToken.approve(user1, tokensToSpend)
+          const allowance = await ourToken.allowance(deployer, user1)
+          console.log(`* Allowance from contract: ${allowance}`)
+          assert.equal(allowance.toString(), tokensToSpend)
+        })
         it("Should approve other address to spend token", async () => {
           await ourToken.approve(user1, tokensToSpend)
           const allowance = await ourToken.allowance(deployer, user1)
@@ -84,7 +98,7 @@ const {
         it("Doesn't allow an unnaproved member to do transfers", async () => {
           await expect(
             playerToken.transferFrom(deployer, user1, tokensToSpend)
-          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+          ).to.be.revertedWith("ERC20: insufficient allowance")
         })
         it("Emits an approval event when an approval occurs", async () => {
           await expect(ourToken.approve(user1, tokensToSpend)).to.emit(
@@ -92,18 +106,11 @@ const {
             "Approval"
           )
         })
-        it("Allowance is accurately being set", async () => {
-          await ourToken.approve(user1, tokensToSpend)
-          const allowance = await ourToken.allowance(deployer, user1)
-
-          assert.equal(allowance.toString(), tokensToSpend)
-          console.log(`* Allowance from contract: ${allowance}`)
-        })
         it("Won't allow a user to go over the allowance", async () => {
           await ourToken.approve(user1, tokensToSpend)
           await expect(
             playerToken.transferFrom(deployer, user1, overDraft)
-          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+          ).to.be.revertedWith("ERC20: insufficient allowance")
         })
       })
     })

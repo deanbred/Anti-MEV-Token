@@ -67,6 +67,10 @@ module.exports = {
     noColors: true,
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
+  contractSizer: {
+    runOnCompile: false,
+    only: ["GMUSSY"],
+  },
   namedAccounts: {
     deployer: {
       default: 0,
