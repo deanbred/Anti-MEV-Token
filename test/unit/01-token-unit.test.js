@@ -42,25 +42,27 @@ const {
         })
       })
       describe("Transfers", () => {
-        const tokensToSend = ethers.utils.parseEther("0.5")
+        const tokensToSend = ethers.utils.parseEther("1")
 
-        it("Should be able to transfer tokens successfully to an address", async () => {
+        it("Should transfer tokens successfully to an address", async () => {
           const startBalance = await ourToken.balanceOf(user1)
           console.log(`* startBalance: ${startBalance}`)
 
           await ourToken.transfer(user1, tokensToSend)
-        //  await network.provider.send("evm_mine", [])
-          await ourToken.transfer(user1, tokensToSend)
 
-          /*           await expect(
-            ourToken.transfer(user1, tokensToSend)
-          ).to.be.revertedWith("Token__TwoTransfers") */
-
+          expect(await ourToken.balanceOf(user1)).to.equal(tokensToSend)
           const endBalance = await ourToken.balanceOf(user1)
           console.log(`* endBalance: ${endBalance}`)
-
-          //  expect(await ourToken.balanceOf(user1)).to.equal(tokensToSend)
-          //  console.log(`* tokensToSend: ${tokensToSend}`)
+        })
+        it("Should prevent 2 transfers in the same block", async () => {
+          await ourToken.transfer(user1, tokensToSend)
+          //await network.provider.send("evm_mine", [])
+          //await network.provider.send("evm_mine", [])
+          await expect(
+            ourToken.transfer(user1, tokensToSend)
+          ).to.be.revertedWith(
+            "AntiMEVToken: Cannot transfer twice in the same block"
+          )
         })
         it("Emits an transfer event when an transfer occurs", async () => {
           await expect(ourToken.transfer(user1, tokensToSend)).to.emit(

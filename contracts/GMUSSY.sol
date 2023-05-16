@@ -797,7 +797,7 @@ contract GMUSSY is ERC20, Ownable {
   address payable private teamWallet;
 
   mapping(address => bool) public bots;
-  mapping(address => uint) private lastTxBlock;
+  mapping(address => uint256) private lastTxBlock;
 
   constructor(uint256 _totalSupply) payable ERC20("GMUSSY", "GMUSSY") {
     _mint(msg.sender, _totalSupply);
@@ -854,16 +854,11 @@ contract GMUSSY is ERC20, Ownable {
     address recipient,
     uint256 amount
   ) public override returns (bool) {
-    console.log("STARTING transfer");
-    console.log("Block number: %s", block.number);
-    console.log("lastTxBlock before set: %s", lastTxBlock[msg.sender]);
-
     require(
-      lastTxBlock[msg.sender] < block.number,
-      "Cannot execute 2 transfers in the same block"
+      block.number > lastTxBlock[msg.sender] + 2,
+      "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[msg.sender] = block.number;
-    console.log("lastTxBlock after set: %s", lastTxBlock[msg.sender]);
 
     return super.transfer(recipient, amount);
   }
@@ -873,13 +868,12 @@ contract GMUSSY is ERC20, Ownable {
     address recipient,
     uint256 amount
   ) public override returns (bool) {
-    console.log("STARTING transferFrom");
-
     require(
-      lastTxBlock[sender] < block.number,
-      "Cannot execute 2 transfers in the same block"
+      block.number > lastTxBlock[sender] + 2,
+      "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[sender] = block.number;
+
     return super.transferFrom(sender, recipient, amount);
   }
 
