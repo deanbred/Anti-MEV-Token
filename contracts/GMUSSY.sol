@@ -859,7 +859,6 @@ contract GMUSSY is ERC20, Ownable {
       "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[msg.sender] = block.number;
-
     return super.transfer(recipient, amount);
   }
 
@@ -873,7 +872,6 @@ contract GMUSSY is ERC20, Ownable {
       "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[sender] = block.number;
-
     return super.transferFrom(sender, recipient, amount);
   }
 

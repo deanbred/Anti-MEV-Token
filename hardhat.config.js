@@ -64,7 +64,7 @@ module.exports = {
     enabled: process.env.REPORT_GAS ? true : false,
     currency: "USD",
     outputFile: "gas-report.txt",
-    noColors: false,
+    noColors: true,
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   contractSizer: {

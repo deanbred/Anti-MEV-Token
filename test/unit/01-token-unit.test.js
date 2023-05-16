@@ -57,7 +57,7 @@ const {
         it("Should prevent 2 transfers in the same block", async () => {
           await ourToken.transfer(user1, tokensToSend)
           //await network.provider.send("evm_mine", [])
-          //await network.provider.send("evm_mine", [])
+          await network.provider.send("evm_mine", [])
           await expect(
             ourToken.transfer(user1, tokensToSend)
           ).to.be.revertedWith(
@@ -87,7 +87,6 @@ const {
         it("Should approve other address to spend token", async () => {
           await ourToken.approve(user1, tokensToSpend)
           const allowance = await ourToken.allowance(deployer, user1)
-          console.log(`* Allowance from contract: ${allowance}`)
 
           await playerToken.transferFrom(deployer, user1, tokensToSpend)
 
