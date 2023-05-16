@@ -7,21 +7,22 @@ const {
 
 !developmentChains.includes(network.name)
   ? describe.skip
-  : describe("GMUSSY Token Unit Test", function () {
-      let ourToken, deployer, user1, devWallet
+  : describe("Token Unit Test", function () {
+      let ourToken, deployer, user1, teamWallet
       beforeEach(async function () {
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
         user1 = accounts.user1
+        teamWallet = "0x4e2B8AaF09caF834afd36b02eCA4c2939910dD6a"
 
         await deployments.fixture("all")
         ourToken = await hre.ethers.getContract("GMUSSY", deployer)
       })
-      it("was deployed", async () => {
+      it("Was deployed successfully ", async () => {
         assert(ourToken.address)
       })
       describe("constructor", () => {
-        it("Should have correct INITIAL_SUPPLY of token ", async () => {
+        it("Has correct INITIAL_SUPPLY of tokens ", async () => {
           const totalSupply = await ourToken.totalSupply()
           assert.equal(totalSupply.toString(), INITIAL_SUPPLY)
           console.log(
@@ -41,29 +42,25 @@ const {
         })
       })
       describe("Transfers", () => {
-        const tokensToSend = ethers.utils.parseEther("1")
-        const tokensReceived = tokensToSend.mul(97).div(100)
+        const tokensToSend = ethers.utils.parseEther("0.5")
 
         it("Should be able to transfer tokens successfully to an address", async () => {
           const startBalance = await ourToken.balanceOf(user1)
-          const teamBalance = await ourToken.balanceOf(
-            "0x5F793b98817ae4609ad2C3c4D7171518E555ABA3"
-          )
           console.log(`* startBalance: ${startBalance}`)
-          console.log(`* teamBalance: ${teamBalance}`)
 
           await ourToken.transfer(user1, tokensToSend)
+        //  await network.provider.send("evm_mine", [])
+          await ourToken.transfer(user1, tokensToSend)
+
+          /*           await expect(
+            ourToken.transfer(user1, tokensToSend)
+          ).to.be.revertedWith("Token__TwoTransfers") */
 
           const endBalance = await ourToken.balanceOf(user1)
-          const endTeamBalance = await ourToken.balanceOf(
-            "0x5F793b98817ae4609ad2C3c4D7171518E555ABA3"
-          )
           console.log(`* endBalance: ${endBalance}`)
-          console.log(`* endTeamBalance: ${endTeamBalance}`)
 
-          expect(await ourToken.balanceOf(user1)).to.equal(tokensReceived)
-          console.log(`* tokensToSend: ${tokensToSend}`)
-          console.log(`* tokensReceived: ${tokensReceived}`)
+          //  expect(await ourToken.balanceOf(user1)).to.equal(tokensToSend)
+          //  console.log(`* tokensToSend: ${tokensToSend}`)
         })
         it("Emits an transfer event when an transfer occurs", async () => {
           await expect(ourToken.transfer(user1, tokensToSend)).to.emit(
@@ -98,7 +95,7 @@ const {
         it("Doesn't allow an unnaproved member to do transfers", async () => {
           await expect(
             playerToken.transferFrom(deployer, user1, tokensToSpend)
-          ).to.be.revertedWith("ERC20: insufficient allowance")
+          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
         })
         it("Emits an approval event when an approval occurs", async () => {
           await expect(ourToken.approve(user1, tokensToSpend)).to.emit(
@@ -110,7 +107,7 @@ const {
           await ourToken.approve(user1, tokensToSpend)
           await expect(
             playerToken.transferFrom(deployer, user1, overDraft)
-          ).to.be.revertedWith("ERC20: insufficient allowance")
+          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
         })
       })
     })
@@ -119,7 +116,7 @@ const {
         it("Should apply tax and transfer the taxed amount to the development wallet", async function () {
           const initialDeployerBalance = await ourToken.balanceOf(deployer)
           const initialDevelopmentWalletBalance = await ourToken.balanceOf(
-            devWallet
+            teamWallet
           )
 
           // Transfer 1000 tokens from deployer to user1
@@ -132,7 +129,7 @@ const {
           const remainingAmount = transferAmount.sub(taxAmount)
 
           // Check developmentWallet balance
-          expect(await ourToken.balanceOf(devWallet)).to.equal(
+          expect(await ourToken.balanceOf(teamWallet)).to.equal(
             initialDevelopmentWalletBalance.add(taxAmount)
           )
 

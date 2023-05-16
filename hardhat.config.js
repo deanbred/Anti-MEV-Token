@@ -2,6 +2,7 @@ require("@nomicfoundation/hardhat-toolbox")
 require("@nomiclabs/hardhat-etherscan")
 require("@nomiclabs/hardhat-ethers")
 require("hardhat-gas-reporter")
+require("hardhat-contract-sizer")
 require("hardhat-deploy")
 require("dotenv").config()
 
@@ -12,6 +13,7 @@ module.exports = {
   defaultNetwork: "hardhat",
   networks: {
     hardhat: {
+      allowUnlimitedContractSize: true,
       forking: {
         url: process.env.MAINNET_RPC,
       },
@@ -31,14 +33,12 @@ module.exports = {
       accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
       saveDeployments: true,
       chainId: 11155111,
-      gasprice: 3000000,
     },
     goerli: {
       url: process.env.GOERLI_RPC,
       accounts: PRIVATE_KEY !== undefined ? [PRIVATE_KEY] : [],
       saveDeployments: true,
       chainId: 5,
-      gasprice: 3000000,
     },
     arb_dev: {
       url: process.env.ARB_DEV_RPC,
@@ -61,15 +61,17 @@ module.exports = {
     },
   },
   gasReporter: {
-    enabled: true,
+    enabled: process.env.REPORT_GAS ? true : false,
     currency: "USD",
     outputFile: "gas-report.txt",
-    noColors: true,
+    noColors: false,
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   contractSizer: {
     runOnCompile: false,
-    only: ["GMUSSY"],
+    strict: true,
+    only: [],
+    outputFile: "contract-sizer.txt",
   },
   namedAccounts: {
     deployer: {
@@ -81,11 +83,13 @@ module.exports = {
     },
   },
   solidity: {
-    compilers: [
-      {
-        version: "0.8.18",
+    version: "0.8.18",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 1000,
       },
-    ],
+    },
   },
   mocha: {
     timeout: 200000,
