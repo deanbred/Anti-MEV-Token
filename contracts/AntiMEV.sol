@@ -787,10 +787,11 @@ library SafeMath {
   }
 }
 
-contract GMUSSY is ERC20, Ownable {
+contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
   bool public enabled = true;
+  uint256 public maxTx;
   uint256 public maxWallet;
 
   address public uniswapV2Pair;
@@ -799,7 +800,7 @@ contract GMUSSY is ERC20, Ownable {
   mapping(address => bool) public bots;
   mapping(address => uint256) private lastTxBlock;
 
-  constructor(uint256 _totalSupply) payable ERC20("GMUSSY", "GMUSSY") {
+  constructor(uint256 _totalSupply) payable ERC20("AntiMEV", "aMEV") {
     _mint(msg.sender, _totalSupply);
   }
 
@@ -807,15 +808,16 @@ contract GMUSSY is ERC20, Ownable {
     enabled = _enabled;
   }
 
-  // set pair address to bait bots but wait to enable trading
   function setVars(
     address _uniswapV2Pair,
     address _teamWallet,
-    uint256 _maxWallet
+    uint256 _maxWallet,
+    uint256 _maxTx
   ) external onlyOwner {
     uniswapV2Pair = _uniswapV2Pair;
     teamWallet = payable(_teamWallet);
     maxWallet = _maxWallet;
+    maxTx = _maxTx;
   }
 
   function setBots(
@@ -846,6 +848,7 @@ contract GMUSSY is ERC20, Ownable {
 
     // enforce max tx and wallet size
     if (enabled && from == uniswapV2Pair) {
+      require(amount <= maxTx, "MAX TRANSACTION!");
       require(super.balanceOf(to) + amount <= maxWallet, "MAX WALLET!");
     }
   }
