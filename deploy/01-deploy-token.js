@@ -2,6 +2,8 @@ const { network, deployments, ethers } = require("hardhat")
 const {
   developmentChains,
   INITIAL_SUPPLY,
+  maxWallet,
+  blockDelay,
 } = require("../helper-hardhat-config")
 const { verify } = require("../helper-functions")
 
@@ -9,7 +11,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deploy, log } = deployments
   const { deployer } = await getNamedAccounts()
 
-  const ourToken = await deploy("GMUSSY", {
+  const ourToken = await deploy("AntiMEV", {
     from: deployer,
     args: [INITIAL_SUPPLY],
     log: true,

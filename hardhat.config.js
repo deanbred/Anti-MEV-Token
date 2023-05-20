@@ -68,7 +68,7 @@ module.exports = {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   contractSizer: {
-    runOnCompile: false,
+    runOnCompile: true,
     strict: true,
     only: [],
     outputFile: "contract-sizer.txt",
@@ -87,7 +87,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 1000,
+        runs: 200,
       },
     },
   },

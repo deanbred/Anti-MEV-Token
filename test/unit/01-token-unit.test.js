@@ -8,15 +8,14 @@ const {
 !developmentChains.includes(network.name)
   ? describe.skip
   : describe("Token Unit Test", function () {
-      let ourToken, deployer, user1, teamWallet
+      let ourToken, deployer, user1
       beforeEach(async function () {
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
         user1 = accounts.user1
-        teamWallet = "0x4e2B8AaF09caF834afd36b02eCA4c2939910dD6a"
 
         await deployments.fixture("all")
-        ourToken = await hre.ethers.getContract("GMUSSY", deployer)
+        ourToken = await hre.ethers.getContract("AntiMEV", deployer)
       })
       it("Was deployed successfully ", async () => {
         assert(ourToken.address)
@@ -33,11 +32,11 @@ const {
         })
         it("Initializes the token with the correct name and symbol ", async () => {
           const name = (await ourToken.name()).toString()
-          assert.equal(name, "GMUSSY")
+          assert.equal(name, "AntiMEV")
           console.log(`* Name from contract is: ${name}`)
 
           const symbol = (await ourToken.symbol()).toString()
-          assert.equal(symbol, "GMUSSY")
+          assert.equal(symbol, "aMEV")
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
@@ -76,7 +75,7 @@ const {
         const overDraft = ethers.utils.parseEther("1.1")
 
         beforeEach(async () => {
-          playerToken = await ethers.getContract("GMUSSY", user1)
+          playerToken = await ethers.getContract("AntiMEV", user1)
         })
         it("Allowance is accurately being set", async () => {
           await ourToken.approve(user1, tokensToSpend)
