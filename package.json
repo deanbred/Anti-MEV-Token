@@ -12,6 +12,7 @@
     "deploy": "hardhat deploy"
   },
   "devDependencies": {
+    "@chainlink/contracts": "^0.6.1",
     "@ethersproject/abi": "^5.4.7",
     "@ethersproject/bytes": "^5.7.0",
     "@ethersproject/hardware-wallets": "^5.7.0",
