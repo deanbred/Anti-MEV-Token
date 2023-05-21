@@ -287,7 +287,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 contract AntiMEV is ERC20, Ownable {
   bool public enabled = true;
-  uint256 public maxWallet;
+  uint256 public maxWallet = 1123581321 * 1e16; // 1% of supply
   uint16 public blockDelay = 3;
   address public uniswapV2Pair;
 
@@ -298,13 +298,15 @@ contract AntiMEV is ERC20, Ownable {
     _mint(msg.sender, _totalSupply);
   }
 
+  function enableTrading(bool _enabled) external onlyOwner {
+    enabled=_enabled;
+  }
+
   function setVars(
-    bool _enabled,
     uint256 _maxWallet,
     uint16 _blockDelay,
     address _uniswapV2Pair
   ) external onlyOwner {
-    enabled = _enabled;
     maxWallet = _maxWallet;
     blockDelay = _blockDelay;
     uniswapV2Pair = _uniswapV2Pair;
@@ -336,7 +338,7 @@ contract AntiMEV is ERC20, Ownable {
       return;
     }
 
-    // enforce max tx and wallet size
+    // enforce max wallet size
     if (enabled && from == uniswapV2Pair) {
       require(super.balanceOf(to) + amount <= maxWallet, "MAX WALLET!");
     }
