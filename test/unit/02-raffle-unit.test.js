@@ -45,7 +45,7 @@ const {
         it("reverts when you don't pay enough", async () => {
           await expect(raffle.enterRaffle()).to.be.revertedWith(
             // is reverted when not paid enough or raffle is not open
-            "Raffle__SendMoreToEnterRaffle"
+            "Not enough value sent"
           )
         })
         it("records player when they enter", async () => {
@@ -75,7 +75,7 @@ const {
             raffle.enterRaffle({ value: raffleEntranceFee })
           ).to.be.revertedWith(
             // is reverted as raffle is calculating
-            "Raffle__RaffleNotOpen"
+            "Raffle is not open"
           )
         })
       })
@@ -131,11 +131,10 @@ const {
         })
         it("reverts if checkup is false", async () => {
           await expect(raffle.performUpkeep("0x")).to.be.revertedWith(
-            "Raffle__UpkeepNotNeeded"
+            "Upkeep not needed"
           )
         })
         it("updates the raffle state and emits a requestId", async () => {
-          // Too many asserts in this test!
           await raffle.enterRaffle({ value: raffleEntranceFee })
           await network.provider.send("evm_increaseTime", [
             interval.toNumber() + 1,
