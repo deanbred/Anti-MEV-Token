@@ -5,23 +5,7 @@ pragma solidity ^0.8.7;
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
-import "hardhat/console.sol";
 
-/* Errors */
-error Raffle__UpkeepNotNeeded(
-  uint256 currentBalance,
-  uint256 numPlayers,
-  uint256 raffleState
-);
-error Raffle__TransferFailed();
-error Raffle__SendMoreToEnterRaffle();
-error Raffle__RaffleNotOpen();
-
-/**@title A sample Raffle Contract
- * @author Patrick Collins
- * @notice This contract is for creating a sample raffle contract
- * @dev This implements the Chainlink VRF Version 2
- */
 contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
   /* Type declarations */
   enum RaffleState {
@@ -29,7 +13,6 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     CALCULATING
   }
   /* State variables */
-  // Chainlink VRF Variables
   VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
   uint64 private immutable i_subscriptionId;
   bytes32 private immutable i_gasLane;
@@ -72,15 +55,8 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
   function enterRaffle() public payable {
     require(msg.value >= i_entranceFee, "Not enough value sent");
     require(s_raffleState == RaffleState.OPEN, "Raffle is not open");
-    /*     if (msg.value < i_entranceFee) {
-      revert Raffle__SendMoreToEnterRaffle();
-    }
-    if (s_raffleState != RaffleState.OPEN) {
-      revert Raffle__RaffleNotOpen();
-    } */
     s_players.push(payable(msg.sender));
     // Emit an event when we update a dynamic array or mapping
-    // Named events with the function name reversed
     emit RaffleEnter(msg.sender);
   }
 
@@ -106,7 +82,7 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     bool hasPlayers = s_players.length > 0;
     bool hasBalance = address(this).balance > 0;
     upkeepNeeded = (timePassed && isOpen && hasBalance && hasPlayers);
-    return (upkeepNeeded, "0x0"); // can we comment this out?
+    return (upkeepNeeded, "0x0"); 
   }
 
   /**
@@ -116,13 +92,6 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
   function performUpkeep(bytes calldata /* performData */) external override {
     (bool upkeepNeeded, ) = checkUpkeep("");
     require(upkeepNeeded, "Upkeep not needed");
-/*     if (!upkeepNeeded) {
-      revert Raffle__UpkeepNotNeeded(
-        address(this).balance,
-        s_players.length,
-        uint256(s_raffleState)
-      );
-    } */
     s_raffleState = RaffleState.CALCULATING;
     uint256 requestId = i_vrfCoordinator.requestRandomWords(
       i_gasLane,
@@ -149,15 +118,11 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     s_raffleState = RaffleState.OPEN;
     s_lastTimeStamp = block.timestamp;
     (bool success, ) = recentWinner.call{value: address(this).balance}("");
-    // require(success, "Transfer failed");
-    if (!success) {
-      revert Raffle__TransferFailed();
-    }
+    require(success, "Transfer failed");
     emit WinnerPicked(recentWinner);
   }
 
   /** Getter Functions */
-
   function getRaffleState() public view returns (RaffleState) {
     return s_raffleState;
   }

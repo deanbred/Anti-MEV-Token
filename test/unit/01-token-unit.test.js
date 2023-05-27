@@ -43,6 +43,7 @@ const {
       describe("Transfers", () => {
         const tokensToSend = ethers.utils.parseEther("1")
         const halfToSend = ethers.utils.parseEther("0.5")
+        // BigNumber.from("50").mul(BigNumber.from("10").pow(18))
 
         it("Should transfer tokens successfully to an address", async () => {
           const startBalance = await ourToken.balanceOf(user1)
@@ -137,41 +138,3 @@ const {
         })
       })
     })
-
-/* describe("Transactions with tax", function () {
-        it("Should apply tax and transfer the taxed amount to the development wallet", async function () {
-          const initialDeployerBalance = await ourToken.balanceOf(deployer)
-          const initialDevelopmentWalletBalance = await ourToken.balanceOf(
-            teamWallet
-          )
-
-          // Transfer 1000 tokens from deployer to user1
-          const transferAmount = ethers.utils.parseUnits("100", 18)
-          await ourToken
-            .connect(deployer)
-            .transfer(user1.address, transferAmount)
-
-          const taxAmount = transferAmount.mul(5).div(100)
-          const remainingAmount = transferAmount.sub(taxAmount)
-
-          // Check developmentWallet balance
-          expect(await ourToken.balanceOf(teamWallet)).to.equal(
-            initialDevelopmentWalletBalance.add(taxAmount)
-          )
-
-          // Check deployer balance
-          expect(await ourToken.balanceOf(deployer)).to.equal(
-            initialDeployerBalance.sub(transferAmount)
-          )
-
-          // Check user1 balance
-          expect(await ourToken.balanceOf(user1)).to.equal(remainingAmount)
-        })
-
-        it("Should fail if the sender does not have enough balance", async function () {
-          const transferAmount = ethers.utils.parseUnits("1", 18)
-
-          await expect(
-            ourToken.transfer(user2, transferAmount)
-          ).to.be.revertedWith("ERC20: transfer amount exceeds balance")
-        }) */

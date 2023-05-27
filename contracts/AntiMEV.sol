@@ -298,15 +298,13 @@ contract AntiMEV is ERC20, Ownable {
     _mint(msg.sender, _totalSupply);
   }
 
-  function enableTrading(bool _enabled) external onlyOwner {
-    enabled=_enabled;
-  }
-
   function setVars(
+    bool _enabled,
     uint256 _maxWallet,
     uint16 _blockDelay,
     address _uniswapV2Pair
   ) external onlyOwner {
+    enabled = _enabled;
     maxWallet = _maxWallet;
     blockDelay = _blockDelay;
     uniswapV2Pair = _uniswapV2Pair;
