@@ -90,6 +90,82 @@ interface IERC20Metadata is IERC20 {
   function decimals() external view returns (uint8);
 }
 
+interface IUniswapV3SwapCallback {
+  function uniswapV3SwapCallback(
+    int256 amount0Delta,
+    int256 amount1Delta,
+    bytes calldata data
+  ) external;
+}
+
+interface ISwapRouter is IUniswapV3SwapCallback {
+  struct ExactInputSingleParams {
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    address recipient;
+    uint256 deadline;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+    uint160 sqrtPriceLimitX96;
+  }
+
+  /// @notice Swaps `amountIn` of one token for as much as possible of another token
+  /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
+  /// @return amountOut The amount of the received token
+  function exactInputSingle(
+    ExactInputSingleParams calldata params
+  ) external payable returns (uint256 amountOut);
+
+  struct ExactInputParams {
+    bytes path;
+    address recipient;
+    uint256 deadline;
+    uint256 amountIn;
+    uint256 amountOutMinimum;
+  }
+
+  /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
+  /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
+  /// @return amountOut The amount of the received token
+  function exactInput(
+    ExactInputParams calldata params
+  ) external payable returns (uint256 amountOut);
+
+  struct ExactOutputSingleParams {
+    address tokenIn;
+    address tokenOut;
+    uint24 fee;
+    address recipient;
+    uint256 deadline;
+    uint256 amountOut;
+    uint256 amountInMaximum;
+    uint160 sqrtPriceLimitX96;
+  }
+
+  /// @notice Swaps as little as possible of one token for `amountOut` of another token
+  /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata
+  /// @return amountIn The amount of the input token
+  function exactOutputSingle(
+    ExactOutputSingleParams calldata params
+  ) external payable returns (uint256 amountIn);
+
+  struct ExactOutputParams {
+    bytes path;
+    address recipient;
+    uint256 deadline;
+    uint256 amountOut;
+    uint256 amountInMaximum;
+  }
+
+  /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
+  /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
+  /// @return amountIn The amount of the input token
+  function exactOutput(
+    ExactOutputParams calldata params
+  ) external payable returns (uint256 amountIn);
+}
+
 contract ERC20 is Context, IERC20, IERC20Metadata {
   mapping(address => uint256) private _balances;
   mapping(address => mapping(address => uint256)) private _allowances;
@@ -287,9 +363,10 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 contract AntiMEV is ERC20, Ownable {
   bool public enabled = true;
-  uint256 public maxWallet = 1123581321 * 1e16; // 1% of supply
+  uint256 public maxWallet = 2250000000 * 1e16; // ~2% of supply
   uint16 public blockDelay = 4;
-  address public uniswapV2Pair;
+  ISwapRouter public swapRouter =
+    ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
   mapping(address => bool) public bots;
   mapping(address => uint256) private lastTxBlock;
@@ -302,12 +379,12 @@ contract AntiMEV is ERC20, Ownable {
     bool _enabled,
     uint256 _maxWallet,
     uint16 _blockDelay,
-    address _uniswapV2Pair
+    ISwapRouter _swapRouter
   ) external onlyOwner {
     enabled = _enabled;
     maxWallet = _maxWallet;
     blockDelay = _blockDelay;
-    uniswapV2Pair = _uniswapV2Pair;
+    swapRouter = ISwapRouter(_swapRouter);
   }
 
   function setBots(
@@ -331,13 +408,13 @@ contract AntiMEV is ERC20, Ownable {
     require(!bots[to] && !bots[from], "MEV BOT!");
 
     // check if trading is live
-    if (uniswapV2Pair == address(0)) {
+    if (address(swapRouter) == address(0)) {
       require(from == owner() || to == owner(), "PAIR NOT SET!");
       return;
     }
 
     // enforce max wallet size
-    if (enabled && from == uniswapV2Pair) {
+    if (enabled && from == address(swapRouter)) {
       require(super.balanceOf(to) + amount <= maxWallet, "MAX WALLET!");
     }
   }
@@ -351,6 +428,7 @@ contract AntiMEV is ERC20, Ownable {
       "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[msg.sender] = block.number;
+
     return super.transfer(recipient, amount);
   }
 
