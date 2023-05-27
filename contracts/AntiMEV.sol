@@ -288,7 +288,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 contract AntiMEV is ERC20, Ownable {
   bool public enabled = true;
   uint256 public maxWallet = 1123581321 * 1e16; // 1% of supply
-  uint16 public blockDelay = 3;
+  uint16 public blockDelay = 4;
   address public uniswapV2Pair;
 
   mapping(address => bool) public bots;
