@@ -1,18 +1,82 @@
 // SPDX-License-Identifier: MIT
-
 pragma solidity ^0.8.7;
 
-import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
-import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
-import "@chainlink/contracts/src/v0.8/interfaces/AutomationCompatibleInterface.sol";
+interface AutomationCompatibleInterface {
+
+  function checkUpkeep(bytes calldata checkData) external returns (bool upkeepNeeded, bytes memory performData);
+
+  function performUpkeep(bytes calldata performData) external;
+}
+
+interface VRFCoordinatorV2Interface {
+
+  function getRequestConfig()
+    external
+    view
+    returns (
+      uint16,
+      uint32,
+      bytes32[] memory
+    );
+
+  function requestRandomWords(
+    bytes32 keyHash,
+    uint64 subId,
+    uint16 minimumRequestConfirmations,
+    uint32 callbackGasLimit,
+    uint32 numWords
+  ) external returns (uint256 requestId);
+
+  function createSubscription() external returns (uint64 subId);
+
+  function getSubscription(uint64 subId)
+    external
+    view
+    returns (
+      uint96 balance,
+      uint64 reqCount,
+      address owner,
+      address[] memory consumers
+    );
+
+  function requestSubscriptionOwnerTransfer(uint64 subId, address newOwner) external;
+
+  function acceptSubscriptionOwnerTransfer(uint64 subId) external;
+
+  function addConsumer(uint64 subId, address consumer) external;
+
+  function removeConsumer(uint64 subId, address consumer) external;
+
+  function cancelSubscription(uint64 subId, address to) external;
+
+  function pendingRequestExists(uint64 subId) external view returns (bool);
+}
+
+abstract contract VRFConsumerBaseV2 {
+  error OnlyCoordinatorCanFulfill(address have, address want);
+  address private immutable vrfCoordinator;
+
+  constructor(address _vrfCoordinator) {
+    vrfCoordinator = _vrfCoordinator;
+  }
+
+  function fulfillRandomWords(uint256 requestId, uint256[] memory randomWords) internal virtual;
+
+  function rawFulfillRandomWords(uint256 requestId, uint256[] memory randomWords) external {
+    if (msg.sender != vrfCoordinator) {
+      revert OnlyCoordinatorCanFulfill(msg.sender, vrfCoordinator);
+    }
+    fulfillRandomWords(requestId, randomWords);
+  }
+}
+
 
 contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
-  /* Type declarations */
   enum RaffleState {
     OPEN,
     CALCULATING
   }
-  /* State variables */
+
   VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
   uint64 private immutable i_subscriptionId;
   bytes32 private immutable i_gasLane;
@@ -20,7 +84,6 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
   uint16 private constant REQUEST_CONFIRMATIONS = 3;
   uint32 private constant NUM_WORDS = 1;
 
-  // Lottery Variables
   uint256 private immutable i_interval;
   uint256 private immutable i_entranceFee;
   uint256 private s_lastTimeStamp;
@@ -28,12 +91,10 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
   address payable[] private s_players;
   RaffleState private s_raffleState;
 
-  /* Events */
   event RequestedRaffleWinner(uint256 indexed requestId);
   event RaffleEnter(address indexed player);
   event WinnerPicked(address indexed player);
 
-  /* Functions */
   constructor(
     address vrfCoordinatorV2,
     uint64 subscriptionId,
@@ -56,19 +117,9 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     require(msg.value >= i_entranceFee, "Not enough value sent");
     require(s_raffleState == RaffleState.OPEN, "Raffle is not open");
     s_players.push(payable(msg.sender));
-    // Emit an event when we update a dynamic array or mapping
     emit RaffleEnter(msg.sender);
   }
 
-  /**
-   * @dev This is the function that the Chainlink Keeper nodes call
-   * they look for `upkeepNeeded` to return True.
-   * the following should be true for this to return true:
-   * 1. The time interval has passed between raffle runs.
-   * 2. The lottery is open.
-   * 3. The contract has ETH.
-   * 4. Implicity, your subscription is funded with LINK.
-   */
   function checkUpkeep(
     bytes memory /* checkData */
   )
@@ -85,10 +136,6 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     return (upkeepNeeded, "0x0"); 
   }
 
-  /**
-   * @dev Once `checkUpkeep` is returning `true`, this function is called
-   * and it kicks off a Chainlink VRF call to get a random winner.
-   */
   function performUpkeep(bytes calldata /* performData */) external override {
     (bool upkeepNeeded, ) = checkUpkeep("");
     require(upkeepNeeded, "Upkeep not needed");
@@ -103,10 +150,6 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     emit RequestedRaffleWinner(requestId);
   }
 
-  /**
-   * @dev This is the function that Chainlink VRF node
-   * calls to send the money to the random winner.
-   */
   function fulfillRandomWords(
     uint256 /* requestId */,
     uint256[] memory randomWords
@@ -122,7 +165,6 @@ contract Raffle is VRFConsumerBaseV2, AutomationCompatibleInterface {
     emit WinnerPicked(recentWinner);
   }
 
-  /** Getter Functions */
   function getRaffleState() public view returns (RaffleState) {
     return s_raffleState;
   }
