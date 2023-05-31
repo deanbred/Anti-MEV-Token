@@ -48,7 +48,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   })
 
   // Ensure the Raffle contract is a valid consumer of the VRFCoordinatorV2Mock contract.
-  if (developmentChains.includes(network.name) && chainId != 5) {
+  if (developmentChains.includes(network.name) && chainId == 31337) {
     const vrfCoordinatorV2Mock = await ethers.getContract(
       "VRFCoordinatorV2Mock"
     )

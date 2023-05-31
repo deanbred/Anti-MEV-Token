@@ -3,6 +3,7 @@ const { network, getNamedAccounts, deployments, ethers } = require("hardhat")
 const {
   developmentChains,
   INITIAL_SUPPLY,
+  MAX_WALLET,
 } = require("../../helper-hardhat-config")
 
 !developmentChains.includes(network.name)
@@ -25,9 +26,12 @@ const {
           const totalSupply = await ourToken.totalSupply()
           assert.equal(totalSupply.toString(), INITIAL_SUPPLY)
           console.log(
-            `* Supply from contract is: ${ethers.utils.commify(
+            `* Supply from contract: ${ethers.utils.commify(
               totalSupply / 1e18
             )}`
+          )
+          console.log(
+            `* Max Wallet: ${ethers.utils.commify(MAX_WALLET / 1e18)}`
           )
         })
         it("Initializes the token with the correct name and symbol ", async () => {

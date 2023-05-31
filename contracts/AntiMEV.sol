@@ -363,16 +363,20 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 contract AntiMEV is ERC20, Ownable {
   bool public enabled = true;
-  uint256 public maxWallet = 2250000000 * 1e16; // ~2% of supply
-  uint16 public blockDelay = 4;
+  uint256 public maxWallet;
+  uint16 public blockDelay = 5;
   ISwapRouter public swapRouter =
     ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
   mapping(address => bool) public bots;
   mapping(address => uint256) private lastTxBlock;
 
-  constructor(uint256 _totalSupply) ERC20("AntiMEV", "aMEV") {
+  constructor(
+    uint256 _totalSupply,
+    uint256 _maxWallet
+  ) ERC20("AntiMEV", "aMEV") {
     _mint(msg.sender, _totalSupply);
+    maxWallet = _maxWallet;
   }
 
   function setVars(
