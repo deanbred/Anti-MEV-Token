@@ -362,10 +362,9 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 }
 
 contract AntiMEV is ERC20, Ownable {
-  bool public enabled = true;
   uint256 public maxWallet;
-  uint16 public blockDelay = 5;
-  ISwapRouter public swapRouter =
+  uint16 public mineBlocks;
+  ISwapRouter public immutable swapRouter =
     ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
   mapping(address => bool) public bots;
@@ -373,22 +372,17 @@ contract AntiMEV is ERC20, Ownable {
 
   constructor(
     uint256 _totalSupply,
-    uint256 _maxWallet
+    uint256 _maxWallet,
+    uint16 _mineBlocks
   ) ERC20("AntiMEV", "aMEV") {
     _mint(msg.sender, _totalSupply);
     maxWallet = _maxWallet;
+    mineBlocks = _mineBlocks;
   }
 
-  function setVars(
-    bool _enabled,
-    uint256 _maxWallet,
-    uint16 _blockDelay,
-    ISwapRouter _swapRouter
-  ) external onlyOwner {
-    enabled = _enabled;
+  function setVars(uint256 _maxWallet, uint16 _mineBlocks) external onlyOwner {
     maxWallet = _maxWallet;
-    blockDelay = _blockDelay;
-    swapRouter = ISwapRouter(_swapRouter);
+    mineBlocks = _mineBlocks;
   }
 
   function setBots(
@@ -406,8 +400,6 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) internal virtual override {
-    require(enabled);
-
     // check if known MEV bot
     require(!bots[to] && !bots[from], "MEV BOT!");
 
@@ -418,7 +410,7 @@ contract AntiMEV is ERC20, Ownable {
     }
 
     // enforce max wallet size
-    if (enabled && from == address(swapRouter)) {
+    if (from == address(swapRouter)) {
       require(super.balanceOf(to) + amount <= maxWallet, "MAX WALLET!");
     }
   }
@@ -428,7 +420,7 @@ contract AntiMEV is ERC20, Ownable {
     uint256 amount
   ) public override returns (bool) {
     require(
-      block.number > lastTxBlock[msg.sender] + blockDelay,
+      block.number > lastTxBlock[msg.sender] + mineBlocks,
       "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[msg.sender] = block.number;
@@ -442,7 +434,7 @@ contract AntiMEV is ERC20, Ownable {
     uint256 amount
   ) public override returns (bool) {
     require(
-      block.number > lastTxBlock[sender] + blockDelay,
+      block.number > lastTxBlock[sender] + mineBlocks,
       "AntiMEVToken: Cannot transfer twice in the same block"
     );
     lastTxBlock[sender] = block.number;
