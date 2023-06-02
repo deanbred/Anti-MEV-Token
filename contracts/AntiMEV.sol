@@ -363,7 +363,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 contract AntiMEV is ERC20, Ownable {
   uint256 public maxWallet;
-  uint16 public mineBlocks =5;
+  uint16 public mineBlocks;
   ISwapRouter public immutable swapRouter =
     ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
