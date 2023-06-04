@@ -11,12 +11,12 @@ const networkConfig = {
     gasLane:
       "0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c", // 30 gwei
     keepersUpdateInterval: "30",
-    raffleEntranceFee: ethers.utils.parseEther("0.01"),
+    raffleEntranceFee: ethers.utils.parseEther("0.02"),
     callbackGasLimit: "2500000",
   },
   1: {
     name: "mainnet",
-    subscriptionId: "",
+    subscriptionId: "762",
     gasLane:
       "0xff8dedfbfa60af186cf3c830acbc32c05aae823045ae5ea7da1e45fbfaba4f92", // 500 gwei
     keepersUpdateInterval: "30",
@@ -40,7 +40,7 @@ const networkConfig = {
     gasLane:
       "0x79d3d8832d904592c0bf9818b621522c988bb8b0c05cdc3b15aea1b6e8db0c15", // 150 gwei
     keepersUpdateInterval: "30",
-    raffleEntranceFee: ethers.utils.parseEther("0.01"),
+    raffleEntranceFee: ethers.utils.parseEther("0.02"),
     callbackGasLimit: "2500000",
     vrfCoordinatorV2: "0x2ca8e0c643bde4c2e08ab1fa0da3401adad7734d",
   },
@@ -50,7 +50,7 @@ const networkConfig = {
     gasLane:
       "0x83d1b6e3388bed3d76426974512bb0d270e9542a765cd667242ea26c0cc0b730", // 50 gwei
     keepersUpdateInterval: "30",
-    raffleEntranceFee: ethers.utils.parseEther("0.01"),
+    raffleEntranceFee: ethers.utils.parseEther("0.02"),
     callbackGasLimit: "2500000",
     vrfCoordinatorV2: "0x6D80646bEAdd07cE68cab36c27c626790bBcf17f",
   },
@@ -60,7 +60,7 @@ const networkConfig = {
     gasLane:
       "0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c", // 30 gwei
     keepersUpdateInterval: "30",
-    raffleEntranceFee: ethers.utils.parseEther("0.01"),
+    raffleEntranceFee: ethers.utils.parseEther("0.02"),
     callbackGasLimit: "2500000",
     vrfCoordinatorV2: "",
   },
