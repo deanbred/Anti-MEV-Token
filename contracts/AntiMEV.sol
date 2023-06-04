@@ -374,7 +374,7 @@ contract AntiMEV is ERC20, Ownable {
     uint256 _totalSupply,
     uint256 _maxWallet,
     uint16 _mineBlocks
-  ) ERC20("AntiMEV", "aMEV") {
+  ) ERC20("AntiMEV", "ANTIMEV") {
     _mint(msg.sender, _totalSupply);
     maxWallet = _maxWallet;
     mineBlocks = _mineBlocks;
