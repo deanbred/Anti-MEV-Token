@@ -38,7 +38,7 @@ interface VRFCoordinatorV2Interface {
       address owner,
       address[] memory consumers
     );
-
+  
   function requestSubscriptionOwnerTransfer(uint64 subId, address newOwner) external;
 
   function acceptSubscriptionOwnerTransfer(uint64 subId) external;

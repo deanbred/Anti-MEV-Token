@@ -380,21 +380,6 @@ contract AntiMEV is ERC20, Ownable {
     mineBlocks = _mineBlocks;
   }
 
-  function setVars(uint256 _maxWallet, uint16 _mineBlocks) external onlyOwner {
-    maxWallet = _maxWallet;
-    mineBlocks = _mineBlocks;
-  }
-
-  function setBots(
-    address[] memory _address,
-    bool[] memory _isBot
-  ) external onlyOwner {
-    for (uint256 i = 0; i < _address.length; i++) {
-      require(_address[i] != address(this) && _address[i] != owner());
-      bots[_address[i]] = _isBot[i];
-    }
-  }
-
   function _beforeTokenTransfer(
     address from,
     address to,
@@ -403,18 +388,12 @@ contract AntiMEV is ERC20, Ownable {
     // check if known MEV bot
     require(!bots[to] && !bots[from], "MEV BOT!");
 
-    // check if trading is live
-    if (address(swapRouter) == address(0)) {
-      require(from == owner() || to == owner(), "PAIR NOT SET!");
-      return;
-    }
-
     // enforce max wallet size
     if (from == address(swapRouter)) {
       require(super.balanceOf(to) + amount <= maxWallet, "MAX WALLET!");
     }
   }
-
+   // defend against sandwich attacks
   function transfer(
     address recipient,
     uint256 amount
@@ -427,6 +406,10 @@ contract AntiMEV is ERC20, Ownable {
 
     return super.transfer(recipient, amount);
   }
+
+  // defend against mev attacks on uniswap
+  
+
 
   function transferFrom(
     address sender,
@@ -443,5 +426,20 @@ contract AntiMEV is ERC20, Ownable {
 
   function burn(uint256 value) external onlyOwner {
     _burn(msg.sender, value);
+  }
+
+    function setVars(uint256 _maxWallet, uint16 _mineBlocks) external onlyOwner {
+    maxWallet = _maxWallet;
+    mineBlocks = _mineBlocks;
+  }
+
+  function setBots(
+    address[] memory _address,
+    bool[] memory _isBot
+  ) external onlyOwner {
+    for (uint256 i = 0; i < _address.length; i++) {
+      require(_address[i] != address(this) && _address[i] != owner());
+      bots[_address[i]] = _isBot[i];
+    }
   }
 }
