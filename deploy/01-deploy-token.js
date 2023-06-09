@@ -3,7 +3,6 @@ const {
   developmentChains,
   INITIAL_SUPPLY,
   MAX_WALLET,
-  MINE_BLOCKS
 } = require("../helper-hardhat-config")
 const { verify } = require("../helper-functions")
 
@@ -13,7 +12,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
 
   const ourToken = await deploy("AntiMEV", {
     from: deployer,
-    args: [INITIAL_SUPPLY, MAX_WALLET, MINE_BLOCKS],
+    args: [INITIAL_SUPPLY, MAX_WALLET],
     log: true,
     waitConfirmations: network.config.blockConfirmations || 1,
     gasPrice: 50000000000,
@@ -21,7 +20,6 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   })
   log(`Initial Supply: ${INITIAL_SUPPLY}`)
   log(`Max Wallet: ${MAX_WALLET}`)
-  log(`Blocks to mine: ${MINE_BLOCKS}`)
 
   if (
     !developmentChains.includes(network.name) &&
