@@ -6,6 +6,7 @@
 
   Telegram: https://t.me/antimev
 */
+
 pragma solidity ^0.8.17;
 
 /**
@@ -913,14 +914,18 @@ contract AntiMEV is ERC20, Ownable {
   bool public enabled;
   uint256 public maxTx;
   uint256 public maxWallet;
+
   uint16 public mineBlocks;
+  uint256 public avgGasPrice;
+  uint256 public gasSampleSize;
+  uint256 public gasDelta;
 
   mapping(address => bool) public bots;
   mapping(address => uint256) public lastTxBlock;
   mapping(address => bool) public isVIP;
 
   address public devWallet;
-  address public burnWallet;
+  address public liqWallet;
 
   uint256 public devTokens;
   uint256 public liqTokens;
@@ -928,35 +933,48 @@ contract AntiMEV is ERC20, Ownable {
   uint16 public devFee = 3;
   uint16 public liqFee = 1;
 
+  // UniswapV3 Router
   ISwapRouter public swapRouter =
     ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
 
   event UpdatedDevWallet(address indexed newWallet);
-  event UpdatedBurnWallet(address indexed newWallet);
+  event UpdatedLiqWallet(address indexed newWallet);
   event VIPAdded(address indexed account, bool isVIP);
 
   constructor() payable ERC20("AntiMEV", "ANTIMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
     maxWallet = _totalSupply.mul(3).div(100); // 3% of total supply
     maxTx = _totalSupply.mul(15).div(1000); // 1.5% of total supply
-    mineBlocks = 5;
+    mineBlocks = 3;
+    gasDelta = 15;
 
     devWallet = address(0xc2657176e213DDF18646eFce08F36D656aBE3396);
-    burnWallet = address(0x0000000); // set this
+    liqWallet = address(0x0000000); // set this
 
     _mint(msg.sender, _totalSupply.mul(90).div(100)); // 90% of total supply
     _mint(devWallet, _totalSupply.mul(5).div(100)); // 5% of total supply
-    _mint(burnWallet, _totalSupply.mul(5).div(100)); // 5% of total supply
+    _mint(liqWallet, _totalSupply.mul(5).div(100)); // 5% of total supply
 
     setVIP(msg.sender, true);
     setVIP(address(this), true);
     setVIP(address(devWallet), true);
-    setVIP(address(burnWallet), true);
+    setVIP(address(liqWallet), true);
     setVIP(address(swapRouter), true);
   }
 
   function setEnabled(bool _enabled) external onlyOwner {
     enabled = _enabled;
+  }
+
+  // calculate average gas price for last 10 txs
+  function updateGasPrice() internal {
+    avgGasPrice =
+      ((avgGasPrice * gasSampleSize) + tx.gasprice) /
+      (gasSampleSize + 1);
+    gasSampleSize += 1;
+    if (gasSampleSize > 10) {
+      avgGasPrice = tx.gasprice;
+    }
   }
 
   function _beforeTokenTransfer(
@@ -965,49 +983,35 @@ contract AntiMEV is ERC20, Ownable {
     uint256 amount
   ) internal virtual override {
     // check if enabled
-    require(enabled, "AntiMEVToken: Not enabled");
+    require(enabled, "Trading not enabled");
 
     // check if known MEV bot
-    require(!bots[to] && !bots[from], "MEV BOT!");
+    require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
+
+    // defend against sandwich attacks using block number
+    require(
+      block.number > lastTxBlock[msg.sender] + mineBlocks,
+      "AntiMEV: Transfers too frequent, possible sandwich attack"
+    );
+    lastTxBlock[msg.sender] = block.number;
+
+    // defend against frontrunners using gas price delta
+    require(
+      tx.gasprice <= avgGasPrice * gasDelta,
+      "AntiMEV: Gas price delta too high, possible frontrun detected"
+    );
+    updateGasPrice();
 
     // on buys enforce maxTx and maxWallet
     if (from == address(swapRouter)) {
       require(amount <= maxTx, "MAX TX!");
-      require(super.balanceOf(to) + amount <= maxWallet, "MAX WALLET!");
-    }
-
-    // on sells enforce maxTx
-    if (to == address(swapRouter)) {
-      require(amount <= maxTx, "MAX TX!");
+      require(super.balanceOf(to) + amount <= maxWallet, "Max wallet exceeded");
     }
   }
 
-  // defend against sandwich attacks
-  function transfer(
-    address recipient,
-    uint256 amount
-  ) public override returns (bool) {
-    require(
-      block.number > lastTxBlock[msg.sender] + mineBlocks,
-      "AntiMEVToken: Cannot transfer twice in the same block"
-    );
-    lastTxBlock[msg.sender] = block.number;
-
-    return super.transfer(recipient, amount);
-  }
-
-  // defend against sandwich attacks
-  function transferFrom(
-    address sender,
-    address recipient,
-    uint256 amount
-  ) public override returns (bool) {
-    require(
-      block.number > lastTxBlock[sender] + mineBlocks,
-      "AntiMEVToken: Cannot transfer twice in the same block"
-    );
-    lastTxBlock[sender] = block.number;
-    return super.transferFrom(sender, recipient, amount);
+  function setMEV(uint16 _mineBlocks, uint256 _gasDelta) external onlyOwner {
+    mineBlocks = _mineBlocks;
+    gasDelta = _gasDelta;
   }
 
   function setVIP(address _address, bool _isVIP) public onlyOwner {
@@ -1015,14 +1019,9 @@ contract AntiMEV is ERC20, Ownable {
     emit VIPAdded(_address, _isVIP);
   }
 
-  function setVars(
-    uint256 _maxTx,
-    uint256 _maxWallet,
-    uint16 _mineBlocks
-  ) external onlyOwner {
+  function setVars(uint256 _maxTx, uint256 _maxWallet) external onlyOwner {
     maxTx = _maxTx;
     maxWallet = _maxWallet;
-    mineBlocks = _mineBlocks;
   }
 
   function setBots(
@@ -1035,19 +1034,47 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
+  function _transfer(
+    address sender,
+    address recipient,
+    uint256 amount
+  ) internal virtual override {
+    if (isVIP[sender] || isVIP[recipient]) {
+      super._transfer(sender, recipient, amount);
+    } else {
+      uint256 _devFee = amount.mul(devFee).div(100);
+      uint256 _liqFee = amount.mul(liqFee).div(100);
+
+      super._transfer(sender, devWallet, _devFee);
+      super._transfer(sender, address(this), _liqFee);
+
+      devTokens += _devFee;
+      liqTokens += _liqFee;
+
+      super._transfer(sender, recipient, amount.sub(_devFee).sub(_liqFee));
+    }
+  }
+
+  function claimFees() external onlyOwner {
+    super._transfer(address(this), devWallet, devTokens);
+    super._transfer(address(this), liqWallet, liqTokens);
+    devTokens = 0;
+    liqTokens = 0;
+  }
+
   function setFees(uint16 _devFee, uint16 _liqFee) external onlyOwner {
     devFee = _devFee;
     liqFee = _liqFee;
   }
 
-  function setDevWallet(address _devWallet) external onlyOwner {
-    devWallet = payable(_devWallet);
-    emit UpdatedDevWallet(_devWallet);
+  function setDevWallet(address _newWallet) external onlyOwner {
+    devWallet = payable(_newWallet);
+    emit UpdatedDevWallet(_newWallet);
   }
 
-  function setBurnWallet(address _burnWallet) external onlyOwner {
-    burnWallet = _burnWallet;
-    emit UpdatedBurnWallet(_burnWallet);
+  function setLiqWallet(address _newWallet) external onlyOwner {
+    liqWallet = _newWallet;
+    emit UpdatedLiqWallet(_newWallet);
   }
 
   function burn(uint256 value) external onlyOwner {
