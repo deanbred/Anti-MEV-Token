@@ -40,7 +40,7 @@ const {
           console.log(`* Name from contract is: ${name}`)
 
           const symbol = (await ourToken.symbol()).toString()
-          assert.equal(symbol, "aMEV")
+          assert.equal(symbol, "AntiMEV")
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
@@ -64,7 +64,7 @@ const {
           await expect(
             ourToken.transfer(user1, tokensToSend)
           ).to.be.revertedWith(
-            "AntiMEVToken: Cannot transfer twice in the same block"
+            "AntiMEV: Transfers too frequent, possible sandwich attack"
           )
         })
         it("Should allow 2 transfers after block delay", async () => {
@@ -82,7 +82,7 @@ const {
           await expect(
             ourToken.transferFrom(deployer, user1, tokensToSend)
           ).to.be.revertedWith(
-            "AntiMEVToken: Cannot transfer twice in the same block"
+            "AntiMEV: Transfers too frequent, possible sandwich attack"
           )
         })
         it("Should allow 2 transferFroms after block delay", async () => {
@@ -126,7 +126,7 @@ const {
         it("Doesn't allow an unnaproved member to do transfers", async () => {
           await expect(
             playerToken.transferFrom(deployer, user1, tokensToSpend)
-          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+          ).to.be.revertedWith("ERC20: insufficient allowance")
         })
         it("Emits an approval event when an approval occurs", async () => {
           await expect(ourToken.approve(user1, tokensToSpend)).to.emit(
@@ -138,7 +138,7 @@ const {
           await ourToken.approve(user1, tokensToSpend)
           await expect(
             playerToken.transferFrom(deployer, user1, overDraft)
-          ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+          ).to.be.revertedWith("ERC20: insufficient allowance")
         })
       })
     })

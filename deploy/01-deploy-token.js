@@ -1,9 +1,5 @@
 const { network, deployments, ethers } = require("hardhat")
-const {
-  developmentChains,
-  INITIAL_SUPPLY,
-  MAX_WALLET,
-} = require("../helper-hardhat-config")
+const { developmentChains } = require("../helper-hardhat-config")
 const { verify } = require("../helper-functions")
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
@@ -12,14 +8,12 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
 
   const ourToken = await deploy("AntiMEV", {
     from: deployer,
-    args: [INITIAL_SUPPLY, MAX_WALLET],
+    args: [],
     log: true,
     waitConfirmations: network.config.blockConfirmations || 1,
-    gasPrice: 50000000000,
+    gasPrice: 500000000000,
     gasLimit: 30000000,
   })
-  log(`Initial Supply: ${INITIAL_SUPPLY}`)
-  log(`Max Wallet: ${MAX_WALLET}`)
 
   if (
     !developmentChains.includes(network.name) &&

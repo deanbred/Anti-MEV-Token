@@ -86,5 +86,4 @@ module.exports = {
   developmentChains,
   INITIAL_SUPPLY,
   MAX_WALLET,
-  MINE_BLOCKS,
 }
