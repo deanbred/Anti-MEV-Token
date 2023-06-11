@@ -212,82 +212,6 @@ interface IERC20Metadata is IERC20 {
   function decimals() external view returns (uint8);
 }
 
-interface IUniswapV3SwapCallback {
-  function uniswapV3SwapCallback(
-    int256 amount0Delta,
-    int256 amount1Delta,
-    bytes calldata data
-  ) external;
-}
-
-interface ISwapRouter is IUniswapV3SwapCallback {
-  struct ExactInputSingleParams {
-    address tokenIn;
-    address tokenOut;
-    uint24 fee;
-    address recipient;
-    uint256 deadline;
-    uint256 amountIn;
-    uint256 amountOutMinimum;
-    uint160 sqrtPriceLimitX96;
-  }
-
-  /// @notice Swaps `amountIn` of one token for as much as possible of another token
-  /// @param params The parameters necessary for the swap, encoded as `ExactInputSingleParams` in calldata
-  /// @return amountOut The amount of the received token
-  function exactInputSingle(
-    ExactInputSingleParams calldata params
-  ) external payable returns (uint256 amountOut);
-
-  struct ExactInputParams {
-    bytes path;
-    address recipient;
-    uint256 deadline;
-    uint256 amountIn;
-    uint256 amountOutMinimum;
-  }
-
-  /// @notice Swaps `amountIn` of one token for as much as possible of another along the specified path
-  /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactInputParams` in calldata
-  /// @return amountOut The amount of the received token
-  function exactInput(
-    ExactInputParams calldata params
-  ) external payable returns (uint256 amountOut);
-
-  struct ExactOutputSingleParams {
-    address tokenIn;
-    address tokenOut;
-    uint24 fee;
-    address recipient;
-    uint256 deadline;
-    uint256 amountOut;
-    uint256 amountInMaximum;
-    uint160 sqrtPriceLimitX96;
-  }
-
-  /// @notice Swaps as little as possible of one token for `amountOut` of another token
-  /// @param params The parameters necessary for the swap, encoded as `ExactOutputSingleParams` in calldata
-  /// @return amountIn The amount of the input token
-  function exactOutputSingle(
-    ExactOutputSingleParams calldata params
-  ) external payable returns (uint256 amountIn);
-
-  struct ExactOutputParams {
-    bytes path;
-    address recipient;
-    uint256 deadline;
-    uint256 amountOut;
-    uint256 amountInMaximum;
-  }
-
-  /// @notice Swaps as little as possible of one token for `amountOut` of another along the specified path (reversed)
-  /// @param params The parameters necessary for the multi-hop swap, encoded as `ExactOutputParams` in calldata
-  /// @return amountIn The amount of the input token
-  function exactOutput(
-    ExactOutputParams calldata params
-  ) external payable returns (uint256 amountIn);
-}
-
 /**
  * @dev Wrappers over Solidity's arithmetic operations.
  *
@@ -505,6 +429,39 @@ library SafeMath {
       return a % b;
     }
   }
+}
+
+interface IUniswapV2Factory {
+  function createPair(
+    address tokenA,
+    address tokenB
+  ) external returns (address pair);
+}
+
+interface IUniswapV2Router02 {
+  function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    uint256 amountIn,
+    uint256 amountOutMin,
+    address[] calldata path,
+    address to,
+    uint256 deadline
+  ) external;
+
+  function factory() external pure returns (address);
+
+  function WETH() external pure returns (address);
+
+  function addLiquidityETH(
+    address token,
+    uint256 amountTokenDesired,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
+    address to,
+    uint256 deadline
+  )
+    external
+    payable
+    returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 }
 
 /**
@@ -912,6 +869,7 @@ contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
   bool public enabled;
+
   uint256 public maxTx;
   uint256 public maxWallet;
 
@@ -924,42 +882,57 @@ contract AntiMEV is ERC20, Ownable {
   mapping(address => uint256) public lastTxBlock;
   mapping(address => bool) public isVIP;
 
-  address public devWallet;
-  address public liqWallet;
+  address payable private devWallet =
+    payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
+  address payable private burnWallet = payable(0x0);
+
+  IUniswapV2Router02 public uniswapV2Router;
+  address public uniswapV2Pair;
+  uint256 public swapTokensAtAmount;
+  bool private inSwap = false;
+  modifier lockTheSwap() {
+    inSwap = true;
+    _;
+    inSwap = false;
+  }
 
   uint256 public devTokens;
   uint256 public liqTokens;
 
-  uint16 public devFee = 3;
-  uint16 public liqFee = 1;
-
-  // UniswapV3 Router
-  ISwapRouter public swapRouter =
-    ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+  uint16 private devFee = 3;
+  uint16 private liqFee = 1;
 
   event UpdatedDevWallet(address indexed newWallet);
-  event UpdatedLiqWallet(address indexed newWallet);
+  event UpdatedBurnWallet(address indexed newWallet);
   event VIPAdded(address indexed account, bool isVIP);
 
   constructor() payable ERC20("AntiMEV", "ANTIMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
     maxWallet = _totalSupply.mul(3).div(100); // 3% of total supply
     maxTx = _totalSupply.mul(15).div(1000); // 1.5% of total supply
+    swapTokensAtAmount = _totalSupply.mul(5).div(10000); // 0.05% of total supply
+
     mineBlocks = 3;
-    gasDelta = 15;
+    gasSampleSize = 10; // 10 blocks
+    gasDelta = 15; // 15% increase in gas price considered bribe
 
-    devWallet = address(0xc2657176e213DDF18646eFce08F36D656aBE3396);
-    liqWallet = address(0x0000000); // set this
+    IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
+      0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
+    ); //
+    uniswapV2Router = _uniswapV2Router;
+    uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(
+      address(this),
+      _uniswapV2Router.WETH()
+    );
 
-    _mint(msg.sender, _totalSupply.mul(90).div(100)); // 90% of total supply
-    _mint(devWallet, _totalSupply.mul(5).div(100)); // 5% of total supply
-    _mint(liqWallet, _totalSupply.mul(5).div(100)); // 5% of total supply
+    _mint(msg.sender, _totalSupply.mul(94).div(100)); // 94% of total supply
+    _mint(devWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
+    _mint(burnWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
 
     setVIP(msg.sender, true);
     setVIP(address(this), true);
     setVIP(address(devWallet), true);
-    setVIP(address(liqWallet), true);
-    setVIP(address(swapRouter), true);
+    setVIP(address(burnWallet), true);
   }
 
   function setEnabled(bool _enabled) external onlyOwner {
@@ -985,28 +958,43 @@ contract AntiMEV is ERC20, Ownable {
     // check if enabled
     require(enabled, "Trading not enabled");
 
+    require(amount <= maxTx, "Max transaction exceeded!");
+
+    if (to != uniswapV2Pair) {
+      require(balanceOf(to) + amount <= maxWallet, "Max wallet exceeded");
+    }
+
     // check if known MEV bot
     require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
 
     // defend against sandwich attacks using block number
-    require(
-      block.number > lastTxBlock[msg.sender] + mineBlocks,
-      "AntiMEV: Transfers too frequent, possible sandwich attack"
-    );
-    lastTxBlock[msg.sender] = block.number;
-
-    // defend against frontrunners using gas price delta
-    require(
-      tx.gasprice <= avgGasPrice * gasDelta,
-      "AntiMEV: Gas price delta too high, possible frontrun detected"
-    );
-    updateGasPrice();
-
-    // on buys enforce maxTx and maxWallet
-    if (from == address(swapRouter)) {
-      require(amount <= maxTx, "MAX TX!");
-      require(super.balanceOf(to) + amount <= maxWallet, "Max wallet exceeded");
+    if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
+      // buy
+      if (block.number > lastTxBlock[to] + mineBlocks) {
+        lastTxBlock[to] = block.number;
+      } else {
+        // add to bots
+        bots[to] = true;
+        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
+      }
     }
+
+    if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
+      // sell
+      if (block.number > lastTxBlock[from] + mineBlocks) {
+        lastTxBlock[from] = block.number;
+      } else {
+        // add to bots
+        bots[from] = true;
+        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
+      }
+    }
+
+    // defend against frontrunner bribe using gas price delta
+    if (tx.gasprice <= avgGasPrice * gasDelta) {
+      revert("AntiMEV: Gas price delta too high, possible frontrun detected");
+    }
+    updateGasPrice();
   }
 
   function setMEV(uint16 _mineBlocks, uint256 _gasDelta) external onlyOwner {
@@ -1014,14 +1002,14 @@ contract AntiMEV is ERC20, Ownable {
     gasDelta = _gasDelta;
   }
 
-  function setVIP(address _address, bool _isVIP) public onlyOwner {
-    isVIP[_address] = _isVIP;
-    emit VIPAdded(_address, _isVIP);
-  }
-
   function setVars(uint256 _maxTx, uint256 _maxWallet) external onlyOwner {
     maxTx = _maxTx;
     maxWallet = _maxWallet;
+  }
+
+  function setVIP(address _address, bool _isVIP) public onlyOwner {
+    isVIP[_address] = _isVIP;
+    emit VIPAdded(_address, _isVIP);
   }
 
   function setBots(
@@ -1034,30 +1022,23 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
-  function _transfer(
-    address sender,
-    address recipient,
-    uint256 amount
-  ) internal virtual override {
-    if (isVIP[sender] || isVIP[recipient]) {
-      super._transfer(sender, recipient, amount);
-    } else {
-      uint256 _devFee = amount.mul(devFee).div(100);
-      uint256 _liqFee = amount.mul(liqFee).div(100);
-
-      super._transfer(sender, devWallet, _devFee);
-      super._transfer(sender, address(this), _liqFee);
-
-      devTokens += _devFee;
-      liqTokens += _liqFee;
-
-      super._transfer(sender, recipient, amount.sub(_devFee).sub(_liqFee));
-    }
+  function swapTokensForEth(uint256 tokenAmount) private lockTheSwap {
+    address[] memory path = new address[](2);
+    path[0] = address(this);
+    path[1] = uniswapV2Router.WETH();
+    _approve(address(this), address(uniswapV2Router), tokenAmount);
+    uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+      tokenAmount,
+      0,
+      path,
+      address(this),
+      block.timestamp
+    );
   }
 
   function claimFees() external onlyOwner {
     super._transfer(address(this), devWallet, devTokens);
-    super._transfer(address(this), liqWallet, liqTokens);
+    super._transfer(address(this), burnWallet, liqTokens);
     devTokens = 0;
     liqTokens = 0;
   }
@@ -1072,9 +1053,9 @@ contract AntiMEV is ERC20, Ownable {
     emit UpdatedDevWallet(_newWallet);
   }
 
-  function setLiqWallet(address _newWallet) external onlyOwner {
-    liqWallet = _newWallet;
-    emit UpdatedLiqWallet(_newWallet);
+  function setBurnWallet(address _newWallet) external onlyOwner {
+    burnWallet = payable(_newWallet);
+    emit UpdatedBurnWallet(_newWallet);
   }
 
   function burn(uint256 value) external onlyOwner {
