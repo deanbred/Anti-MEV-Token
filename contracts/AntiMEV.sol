@@ -452,14 +452,6 @@ interface IUniswapV2Factory {
 }
 
 interface IUniswapV2Router02 {
-  function swapExactTokensForETHSupportingFeeOnTransferTokens(
-    uint256 amountIn,
-    uint256 amountOutMin,
-    address[] calldata path,
-    address to,
-    uint256 deadline
-  ) external;
-
   function factory() external pure returns (address);
 
   function WETH() external pure returns (address);
@@ -475,6 +467,38 @@ interface IUniswapV2Router02 {
     external
     payable
     returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
+
+  function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    uint256 amountIn,
+    uint256 amountOutMin,
+    address[] calldata path,
+    address to,
+    uint256 deadline
+  ) external;
+
+  function swapExactETHForTokensSupportingFeeOnTransferTokens(
+    uint amountOutMin,
+    address[] calldata path,
+    address to,
+    uint deadline
+  ) external payable;
+
+  function swapExactTokensForTokensSupportingFeeOnTransferTokens(
+    uint amountIn,
+    uint amountOutMin,
+    address[] calldata path,
+    address to,
+    uint deadline
+  ) external;
+
+  function removeLiquidityETHSupportingFeeOnTransferTokens(
+    address token,
+    uint liquidity,
+    uint amountTokenMin,
+    uint amountETHMin,
+    address to,
+    uint deadline
+  ) external returns (uint amountETH);
 }
 
 /**
@@ -888,7 +912,7 @@ contract AntiMEV is ERC20, Ownable {
 
   uint16 public mineBlocks;
   uint256 public avgGasPrice;
-  uint256 public gasSampleSize;
+  uint16 public gasSampleSize;
   uint256 public gasDelta;
 
   mapping(address => bool) public bots;
@@ -920,6 +944,7 @@ contract AntiMEV is ERC20, Ownable {
   event UpdatedDevWallet(address indexed newWallet);
   event UpdatedBurnWallet(address indexed newWallet);
   event VIPAdded(address indexed account, bool isVIP);
+  event MEVSettingsUpdated(uint16 mineBlocks, uint256 gasDelta);
 
   constructor() payable ERC20("AntiMEV", "AntiMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
@@ -929,8 +954,7 @@ contract AntiMEV is ERC20, Ownable {
     swapTokensAtAmount = _totalSupply.mul(5).div(10000); // 0.05% of total supply
 
     mineBlocks = 3; // 3 blocks must be mined before 2nd tx
-    gasSampleSize = 10; // 10 blocks used to calculate avg gas price
-    gasDelta = 15; // 15% increase in gas price considered bribe
+    gasDelta = 10; // 10% increase in gas price considered bribe
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -953,17 +977,6 @@ contract AntiMEV is ERC20, Ownable {
 
   function setEnabled(bool _enabled) external onlyOwner {
     enabled = _enabled;
-  }
-
-  // calculate average gas price for last 10 txs
-  function updateGasPrice() internal {
-    avgGasPrice =
-      ((avgGasPrice * gasSampleSize) + tx.gasprice) /
-      (gasSampleSize + 1);
-    gasSampleSize += 1;
-    if (gasSampleSize > 10) {
-      avgGasPrice = tx.gasprice;
-    }
   }
 
   function _beforeTokenTransfer(
@@ -993,7 +1006,7 @@ contract AntiMEV is ERC20, Ownable {
         bots[to] = true;
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
-      console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+      //console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     }
 
     if (to == uniswapV2Pair && msg.sender != address(uniswapV2Router)) {
@@ -1017,6 +1030,17 @@ contract AntiMEV is ERC20, Ownable {
     }
 
     return super.transfer(to, amount);
+  }
+
+  // calculate average gas price for last 10 txs
+  function updateGasPrice() public {
+    avgGasPrice =
+      ((avgGasPrice * gasSampleSize) + tx.gasprice) /
+      (gasSampleSize + 1);
+    gasSampleSize += 1;
+    if (gasSampleSize > 10) {
+      avgGasPrice = tx.gasprice;
+    }
   }
 
   function transferFrom(
@@ -1054,6 +1078,7 @@ contract AntiMEV is ERC20, Ownable {
   function setMEV(uint16 _mineBlocks, uint256 _gasDelta) external onlyOwner {
     mineBlocks = _mineBlocks;
     gasDelta = _gasDelta;
+    emit MEVSettingsUpdated(_mineBlocks, _gasDelta);
   }
 
   function setVars(uint256 _maxTx, uint256 _maxWallet) external onlyOwner {

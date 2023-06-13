@@ -9,7 +9,7 @@ const {
 !developmentChains.includes(network.name)
   ? describe.skip
   : describe("Token Unit Test", function () {
-      let ourToken, deployer, user1, user2
+      let ourToken, deployer, user1, gasPrice, aveGasPrice
       beforeEach(async function () {
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
@@ -44,6 +44,39 @@ const {
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
+      describe("Gas Bribes", () => {
+        const tokensToSend = ethers.utils.parseEther("1")
+
+        beforeEach(async () => {
+          await ourToken.approve(deployer, tokensToSend)
+          await ourToken.setMEV(0, 10)
+        })
+        it("UpdateGasPrice function calculates average gas price", async () => {
+          gasPrice = await ourToken.updateGasPrice()
+          console.log(`* Gas price 1: ${gasPrice.gasPrice.toNumber()}`)
+
+          const transactionResponse = await ourToken.transfer(
+            user1,
+            tokensToSend
+          )
+          const transactionReceipt = await transactionResponse.wait()
+          const { gasUsed, effectiveGasPrice } = transactionReceipt
+          const transferGasCost = gasUsed.mul(effectiveGasPrice)
+
+          console.log(`GasUsed: ${gasUsed}`)
+          console.log(`GasPrice: ${effectiveGasPrice}`)
+          console.log(`GasCost: ${transferGasCost}`)
+
+          gasPrice = await ourToken.updateGasPrice()
+          console.log(`* Gas price 2: ${gasPrice.gasPrice.toNumber()}`)
+
+          await ourToken.transfer(user1, tokensToSend)
+
+          gasPrice = await ourToken.updateGasPrice()
+          console.log(`* Gas price 3: ${gasPrice.gasPrice.toNumber()}`)
+        })
+      })
+
       describe("Transfers", () => {
         const tokensToSend = ethers.utils.parseEther("1")
         const halfToSend = ethers.utils.parseEther("0.5")
