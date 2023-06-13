@@ -913,11 +913,18 @@ contract AntiMEV is ERC20, Ownable {
   uint16 public mineBlocks;
   uint256 public avgGasPrice;
   uint16 public gasSampleSize;
-  uint256 public gasDelta;
+  uint16 public gasDelta;
 
-  mapping(address => bool) public bots;
-  mapping(address => uint256) public lastTxBlock;
   mapping(address => bool) public isVIP;
+  mapping(address => bool) public bots;
+
+  mapping(address => uint256) public lastTxBlock;
+
+  struct Holders {
+    address holder;
+    uint256 lastTxBlock;
+  }
+  Holders[] public holders;
 
   address payable private devWallet =
     payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
@@ -975,6 +982,11 @@ contract AntiMEV is ERC20, Ownable {
     _mint(burnWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
   }
 
+  function addHolder(address _newHolder, uint256 _txBlock) public {
+    // require(msg.sender == uniswapV2Pair, "Only Uniswap pair can add holders");
+    holders.push(Holders(_newHolder, _txBlock));
+  }
+
   function setEnabled(bool _enabled) external onlyOwner {
     enabled = _enabled;
   }
@@ -992,6 +1004,8 @@ contract AntiMEV is ERC20, Ownable {
 
     // check if known MEV bot
     require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
+
+    updateGasPrice();
   }
 
   function transfer(address to, uint256 amount) public override returns (bool) {
@@ -999,8 +1013,10 @@ contract AntiMEV is ERC20, Ownable {
     if (to != address(uniswapV2Router)) {
       //msg.sender == uniswapV2Pair &&
       // buy
+
       if (block.number > lastTxBlock[to] + mineBlocks) {
         lastTxBlock[to] = block.number;
+        addHolder(to, block.number);
       } else {
         // add to bots
         bots[to] = true;
@@ -1013,20 +1029,18 @@ contract AntiMEV is ERC20, Ownable {
       // sell
       if (block.number > lastTxBlock[msg.sender] + mineBlocks) {
         lastTxBlock[msg.sender] = block.number;
+        addHolder(msg.sender, block.number);
       } else {
         // add to bots
         bots[msg.sender] = true;
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
     }
-    // defend against frontrunner bribe using gas price delta
-    updateGasPrice();
-    console.log("avgGasPrice: %s", avgGasPrice);
-    console.log("tx.gasprice: %s", tx.gasprice);
-    console.log("gasDelta: %s", gasDelta);
 
     if (tx.gasprice >= avgGasPrice + avgGasPrice.mul(gasDelta).div(100)) {
-      revert("AntiMEV: Gas price delta too high, possible frontrun detected");
+      revert(
+        "AntiMEV: Gas price difference too high, possible frontrun detected"
+      );
     }
 
     return super.transfer(to, amount);
@@ -1041,6 +1055,9 @@ contract AntiMEV is ERC20, Ownable {
     if (gasSampleSize > 10) {
       avgGasPrice = tx.gasprice;
     }
+    console.log("tx.gasprice: %s  %s", tx.gasprice, gasSampleSize);
+    console.log("avgGasPrice: %s  %s", avgGasPrice, gasSampleSize);
+    console.log("---------------------------");
   }
 
   function transferFrom(
@@ -1059,7 +1076,7 @@ contract AntiMEV is ERC20, Ownable {
         bots[to] = true;
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
-      console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+      // console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     }
 
     if (to == uniswapV2Pair && msg.sender != address(uniswapV2Router)) {
@@ -1075,7 +1092,7 @@ contract AntiMEV is ERC20, Ownable {
     return super.transferFrom(from, to, amount);
   }
 
-  function setMEV(uint16 _mineBlocks, uint256 _gasDelta) external onlyOwner {
+  function setMEV(uint16 _mineBlocks, uint16 _gasDelta) external onlyOwner {
     mineBlocks = _mineBlocks;
     gasDelta = _gasDelta;
     emit MEVSettingsUpdated(_mineBlocks, _gasDelta);

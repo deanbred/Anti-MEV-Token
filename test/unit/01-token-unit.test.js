@@ -44,36 +44,34 @@ const {
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
-      describe("Gas Bribes", () => {
+      describe("* Gas Bribes *", () => {
         const tokensToSend = ethers.utils.parseEther("1")
 
         beforeEach(async () => {
           await ourToken.approve(deployer, tokensToSend)
-          await ourToken.setMEV(0, 10)
+          // await ourToken.setMEV(0, 10)
         })
-        it("UpdateGasPrice function calculates average gas price", async () => {
-          gasPrice = await ourToken.updateGasPrice()
-          console.log(`* Gas price 1: ${gasPrice.gasPrice.toNumber()}`)
 
-          const transactionResponse = await ourToken.transfer(
-            user1,
-            tokensToSend
-          )
-          const transactionReceipt = await transactionResponse.wait()
-          const { gasUsed, effectiveGasPrice } = transactionReceipt
-          const transferGasCost = gasUsed.mul(effectiveGasPrice)
+        it("Should calculate the average gas price of 10 transfers", async () => {
+          for (let i = 0; i < 10; i++) {
+            await ethers.provider.send("evm_mine", [])
+            await ethers.provider.send("evm_mine", [])
+            await ethers.provider.send("evm_mine", [])
 
-          console.log(`GasUsed: ${gasUsed}`)
-          console.log(`GasPrice: ${effectiveGasPrice}`)
-          console.log(`GasCost: ${transferGasCost}`)
+            const transactionResponse = await ourToken.transfer(
+              user1,
+              tokensToSend
+            )
 
-          gasPrice = await ourToken.updateGasPrice()
-          console.log(`* Gas price 2: ${gasPrice.gasPrice.toNumber()}`)
+            const transactionReceipt = await transactionResponse.wait()
+            const { gasUsed, effectiveGasPrice } = transactionReceipt
+            const transferGasCost = gasUsed.mul(effectiveGasPrice)
 
-          await ourToken.transfer(user1, tokensToSend)
-
-          gasPrice = await ourToken.updateGasPrice()
-          console.log(`* Gas price 3: ${gasPrice.gasPrice.toNumber()}`)
+            console.log(`gasUsed ${i}: ${gasUsed}`)
+            console.log(`effectiveGasPrice ${i}: ${effectiveGasPrice}`)
+            console.log(`transferGasCost ${i}: ${transferGasCost}`)
+            console.log("---------------------------")
+          }
         })
       })
 
