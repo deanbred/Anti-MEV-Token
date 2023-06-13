@@ -961,7 +961,7 @@ contract AntiMEV is ERC20, Ownable {
     swapTokensAtAmount = _totalSupply.mul(5).div(10000); // 0.05% of total supply
 
     mineBlocks = 3; // 3 blocks must be mined before 2nd tx
-    gasDelta = 10; // 10% increase in gas price considered bribe
+    gasDelta = 1; // 10% increase in gas price considered bribe
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -1004,8 +1004,6 @@ contract AntiMEV is ERC20, Ownable {
 
     // check if known MEV bot
     require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
-
-    updateGasPrice();
   }
 
   function transfer(address to, uint256 amount) public override returns (bool) {
@@ -1036,6 +1034,7 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
     }
+    updateGasPrice();
 
     if (tx.gasprice >= avgGasPrice + avgGasPrice.mul(gasDelta).div(100)) {
       revert(
