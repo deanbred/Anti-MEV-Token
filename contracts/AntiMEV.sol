@@ -961,7 +961,8 @@ contract AntiMEV is ERC20, Ownable {
     swapTokensAtAmount = _totalSupply.mul(5).div(10000); // 0.05% of total supply
 
     mineBlocks = 3; // 3 blocks must be mined before 2nd tx
-    gasDelta = 1; // 10% increase in gas price considered bribe
+    gasDelta = 5; // 5% increase in gas price considered bribe
+    gasSampleSize = 1;
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -977,9 +978,9 @@ contract AntiMEV is ERC20, Ownable {
     setVIP(address(devWallet), true);
     setVIP(address(burnWallet), true);
 
-    _mint(msg.sender, _totalSupply.mul(94).div(100)); // 94% of total supply
-    _mint(devWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
-    _mint(burnWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
+    _mint(msg.sender, _totalSupply.mul(92).div(100)); // 92% of total supply
+    _mint(devWallet, _totalSupply.mul(4).div(100)); // 4% of total supply
+    _mint(burnWallet, _totalSupply.mul(4).div(100)); // 4% of total supply
   }
 
   function addHolder(address _newHolder, uint256 _txBlock) public {
@@ -1045,17 +1046,21 @@ contract AntiMEV is ERC20, Ownable {
     return super.transfer(to, amount);
   }
 
-  // calculate average gas price for last 10 txs
+  // calculate rolling average of gas price for last 10 txs
   function updateGasPrice() public {
     avgGasPrice =
-      ((avgGasPrice * gasSampleSize) + tx.gasprice) /
-      (gasSampleSize + 1);
+      (avgGasPrice * (gasSampleSize - 1)) /
+      gasSampleSize +
+      tx.gasprice /
+      gasSampleSize;
+
     gasSampleSize += 1;
     if (gasSampleSize > 10) {
       avgGasPrice = tx.gasprice;
+      gasSampleSize = 1;
     }
     console.log("tx.gasprice: %s  %s", tx.gasprice, gasSampleSize);
-    console.log("avgGasPrice: %s  %s", avgGasPrice, gasSampleSize);
+    console.log("** avgGasPrice: %s  %s", avgGasPrice, gasSampleSize);
     console.log("---------------------------");
   }
 

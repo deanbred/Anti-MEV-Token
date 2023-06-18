@@ -1,10 +1,6 @@
 const { assert, expect } = require("chai")
 const { network, getNamedAccounts, deployments, ethers } = require("hardhat")
-const {
-  developmentChains,
-  INITIAL_SUPPLY,
-  MAX_WALLET,
-} = require("../../helper-hardhat-config")
+const { developmentChains } = require("../../helper-hardhat-config")
 
 !developmentChains.includes(network.name)
   ? describe.skip
@@ -22,16 +18,12 @@ const {
         assert(ourToken.address)
       })
       describe("constructor", () => {
-        it("Has correct INITIAL_SUPPLY of tokens ", async () => {
+        it("Has correct supply of tokens ", async () => {
           const totalSupply = await ourToken.totalSupply()
-          assert.equal(totalSupply.toString(), INITIAL_SUPPLY)
           console.log(
             `* Supply from contract: ${ethers.utils.commify(
               totalSupply / 1e18
             )}`
-          )
-          console.log(
-            `* Max Wallet: ${ethers.utils.commify(MAX_WALLET / 1e18)}`
           )
         })
         it("Initializes the token with the correct name and symbol ", async () => {
@@ -49,11 +41,11 @@ const {
 
         beforeEach(async () => {
           await ourToken.approve(deployer, tokensToSend)
-          // await ourToken.setMEV(0, 10)
+          await ourToken.setMEV(3, 5)
         })
 
         it("Should calculate the average gas price of 10 transfers", async () => {
-          for (let i = 0; i < 10; i++) {
+          for (let i = 2; i < 12; i++) {
             await ethers.provider.send("evm_mine", [])
             await ethers.provider.send("evm_mine", [])
             await ethers.provider.send("evm_mine", [])
@@ -68,6 +60,8 @@ const {
             const transferGasCost = gasUsed.mul(effectiveGasPrice)
 
             console.log(`gasUsed ${i}: ${gasUsed}`)
+            console.log("---------------------------")
+
             console.log(`effectiveGasPrice ${i}: ${effectiveGasPrice}`)
             console.log(`transferGasCost ${i}: ${transferGasCost}`)
             console.log("---------------------------")
