@@ -110,6 +110,52 @@ abstract contract Ownable is Context {
   }
 }
 
+abstract contract ReentrancyGuard {
+  uint256 private constant _NOT_ENTERED = 1;
+  uint256 private constant _ENTERED = 2;
+
+  uint256 private _status;
+
+  constructor() {
+    _status = _NOT_ENTERED;
+  }
+
+  /**
+   * @dev Prevents a contract from calling itself, directly or indirectly.
+   * Calling a `nonReentrant` function from another `nonReentrant`
+   * function is not supported. It is possible to prevent this from happening
+   * by making the `nonReentrant` function external, and making it call a
+   * `private` function that does the actual work.
+   */
+  modifier nonReentrant() {
+    _nonReentrantBefore();
+    _;
+    _nonReentrantAfter();
+  }
+
+  function _nonReentrantBefore() private {
+    // On the first call to nonReentrant, _status will be _NOT_ENTERED
+    require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
+
+    // Any calls to nonReentrant after this point will fail
+    _status = _ENTERED;
+  }
+
+  function _nonReentrantAfter() private {
+    // By storing the original value once again, a refund is triggered (see
+    // https://eips.ethereum.org/EIPS/eip-2200)
+    _status = _NOT_ENTERED;
+  }
+
+  /**
+   * @dev Returns true if the reentrancy guard is currently set to "entered", which indicates there is a
+   * `nonReentrant` function in the call stack.
+   */
+  function _reentrancyGuardEntered() internal view returns (bool) {
+    return _status == _ENTERED;
+  }
+}
+
 /**
  * @dev Interface of the ERC20 standard as defined in the EIP.
  */
@@ -905,35 +951,26 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
-  bool public enabled = true;
-
   uint256 public maxTx;
   uint256 public maxWallet;
 
-  uint16 public mineBlocks;
+  uint256 public mineBlocks;
   uint256 public avgGasPrice;
-  uint16 public gasSampleSize;
-  uint16 public gasDelta;
+  uint256 public gasSampleSize;
+  uint256 public gasDelta;
 
-  mapping(address => bool) public isVIP;
-  mapping(address => bool) public bots;
+  mapping(address => bool) public bots; // MEV bots
+  mapping(address => bool) public isVIP; // VIP addresses
+  mapping(address => uint256) public lastTxBlock; // last tx block for each address
 
-  mapping(address => uint256) public lastTxBlock;
-
-  struct Holders {
-    address holder;
-    uint256 lastTxBlock;
-  }
-  Holders[] public holders;
+  IUniswapV2Router02 public uniswapV2Router;
+  address public uniswapV2Pair;
+  uint256 public swapTokensAtAmount;
 
   address payable private devWallet =
     payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
   address payable private burnWallet =
     payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
-
-  IUniswapV2Router02 public uniswapV2Router;
-  address public uniswapV2Pair;
-  uint256 public swapTokensAtAmount;
 
   bool private inSwap = false;
   modifier lockTheSwap() {
@@ -942,16 +979,21 @@ contract AntiMEV is ERC20, Ownable {
     inSwap = false;
   }
 
-  uint256 public devTokens;
-  uint256 public liqTokens;
+  uint256 public liqTokens; // tokens to be added to liquidity pool
+  uint256 public devTokens; // tokens to be sent to dev wallet
+  uint256 private liqFee = 1; // 1% tax on all transactions going to liquidity
+  uint256 private devFee = 2; // 2% tax on all transactions going to dev wallet
 
-  uint16 private devFee = 3;
-  uint16 private liqFee = 1;
-
-  event UpdatedDevWallet(address indexed newWallet);
+  event MEVSettingsUpdated(uint256 mineBlocks, uint256 gasDelta);
+  event Burn(address indexed user, uint256 amount);
   event UpdatedBurnWallet(address indexed newWallet);
+  event UpdatedDevWallet(address indexed newWallet);
   event VIPAdded(address indexed account, bool isVIP);
-  event MEVSettingsUpdated(uint16 mineBlocks, uint256 gasDelta);
+  event SwapAndLiquify(
+    uint256 tokensSwapped,
+    uint256 ethReceived,
+    uint256 tokensIntoLiquidity
+  );
 
   constructor() payable ERC20("AntiMEV", "AntiMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
@@ -962,11 +1004,11 @@ contract AntiMEV is ERC20, Ownable {
 
     mineBlocks = 3; // 3 blocks must be mined before 2nd tx
     gasDelta = 5; // 5% increase in gas price considered bribe
-    gasSampleSize = 1;
+    gasSampleSize = 1; // used to calculate rolling average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
-    ); //
+    );
     uniswapV2Router = _uniswapV2Router;
     uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory()).createPair(
       address(this),
@@ -977,19 +1019,31 @@ contract AntiMEV is ERC20, Ownable {
     setVIP(address(this), true);
     setVIP(address(devWallet), true);
     setVIP(address(burnWallet), true);
+    // setVIP(address(uniswapV2Pair), true);
+    setVIP(address(uniswapV2Router), true);
 
     _mint(msg.sender, _totalSupply.mul(92).div(100)); // 92% of total supply
     _mint(devWallet, _totalSupply.mul(4).div(100)); // 4% of total supply
     _mint(burnWallet, _totalSupply.mul(4).div(100)); // 4% of total supply
   }
 
-  function addHolder(address _newHolder, uint256 _txBlock) public {
-    // require(msg.sender == uniswapV2Pair, "Only Uniswap pair can add holders");
-    holders.push(Holders(_newHolder, _txBlock));
-  }
+  // calculate rolling average of gas price for last 10 txs
+  function updateGasPrice() public {
+    avgGasPrice =
+      (avgGasPrice * (gasSampleSize - 1)) /
+      gasSampleSize +
+      tx.gasprice /
+      gasSampleSize;
 
-  function setEnabled(bool _enabled) external onlyOwner {
-    enabled = _enabled;
+    gasSampleSize += 1;
+    // reset avgGasPrice if sample size too large
+    if (gasSampleSize > 10) {
+      avgGasPrice = tx.gasprice;
+      gasSampleSize = 1;
+    }
+    console.log("tx.gasprice: %s  %s", tx.gasprice, gasSampleSize);
+    console.log("** avgGasPrice: %s  %s", avgGasPrice, gasSampleSize);
+    console.log("---------------------------");
   }
 
   function _beforeTokenTransfer(
@@ -997,38 +1051,49 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) internal virtual override {
-    if (to != uniswapV2Pair && !isVIP[from] && !isVIP[to]) {
-      require(enabled, "Trading not enabled");
+    // check if VIP
+    if (!isVIP[from] && !isVIP[to]) {
+      // check if known MEV bot
+      require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
+      // check if max tx amount exceeded
       require(amount <= maxTx, "Max transaction exceeded!");
+      // check if max wallet amount exceeded
       require(super.balanceOf(to) + amount <= maxWallet, "Max wallet exceeded");
     }
-
-    // check if known MEV bot
-    require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
   }
 
-  function transfer(address to, uint256 amount) public override returns (bool) {
-    // defend against sandwich attacks using block number
-    if (to != address(uniswapV2Router)) {
-      //msg.sender == uniswapV2Pair &&
-      // buy
-
+  function handleBuys(address to, uint256 amount) private {
+    // handle buys
+    if (msg.sender == uniswapV2Pair && to != address(uniswapV2Router)) {
+      // defend against sandwich attacks using block number
       if (block.number > lastTxBlock[to] + mineBlocks) {
         lastTxBlock[to] = block.number;
-        addHolder(to, block.number);
       } else {
         // add to bots
         bots[to] = true;
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
-      //console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+    }
+  }
+
+  function transfer(address to, uint256 amount) public override returns (bool) {
+    // handle buys
+    if (msg.sender == uniswapV2Pair && to != address(uniswapV2Router)) {
+      // defend against sandwich attacks using block number
+      if (block.number > lastTxBlock[to] + mineBlocks) {
+        lastTxBlock[to] = block.number;
+      } else {
+        // add to bots
+        bots[to] = true;
+        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
+      }
     }
 
+    // handle sells
     if (to == uniswapV2Pair && msg.sender != address(uniswapV2Router)) {
-      // sell
+      // defend against sandwich attacks using block number
       if (block.number > lastTxBlock[msg.sender] + mineBlocks) {
         lastTxBlock[msg.sender] = block.number;
-        addHolder(msg.sender, block.number);
       } else {
         // add to bots
         bots[msg.sender] = true;
@@ -1042,26 +1107,8 @@ contract AntiMEV is ERC20, Ownable {
         "AntiMEV: Gas price difference too high, possible frontrun detected"
       );
     }
-
+    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     return super.transfer(to, amount);
-  }
-
-  // calculate rolling average of gas price for last 10 txs
-  function updateGasPrice() public {
-    avgGasPrice =
-      (avgGasPrice * (gasSampleSize - 1)) /
-      gasSampleSize +
-      tx.gasprice /
-      gasSampleSize;
-
-    gasSampleSize += 1;
-    if (gasSampleSize > 10) {
-      avgGasPrice = tx.gasprice;
-      gasSampleSize = 1;
-    }
-    console.log("tx.gasprice: %s  %s", tx.gasprice, gasSampleSize);
-    console.log("** avgGasPrice: %s  %s", avgGasPrice, gasSampleSize);
-    console.log("---------------------------");
   }
 
   function transferFrom(
@@ -1069,10 +1116,9 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) public override returns (bool) {
-    // defend against sandwich attacks using block number
-    if (to != address(uniswapV2Router)) {
-      //msg.sender == uniswapV2Pair &&
-      // buy
+    // handle buys
+    if (msg.sender == uniswapV2Pair && to != address(uniswapV2Router)) {
+      // defend against sandwich attacks using block number
       if (block.number > lastTxBlock[to] + mineBlocks) {
         lastTxBlock[to] = block.number;
       } else {
@@ -1080,11 +1126,11 @@ contract AntiMEV is ERC20, Ownable {
         bots[to] = true;
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
-      // console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     }
 
+    // handle sells
     if (to == uniswapV2Pair && msg.sender != address(uniswapV2Router)) {
-      // sell
+      // defend against sandwich attacks using block number
       if (block.number > lastTxBlock[msg.sender] + mineBlocks) {
         lastTxBlock[msg.sender] = block.number;
       } else {
@@ -1093,10 +1139,20 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
     }
+
+    updateGasPrice();
+
+    if (tx.gasprice >= avgGasPrice + avgGasPrice.mul(gasDelta).div(100)) {
+      revert(
+        "AntiMEV: Gas price difference too high, possible frontrun detected"
+      );
+    }
+
+    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     return super.transferFrom(from, to, amount);
   }
 
-  function setMEV(uint16 _mineBlocks, uint16 _gasDelta) external onlyOwner {
+  function setMEV(uint256 _mineBlocks, uint256 _gasDelta) external onlyOwner {
     mineBlocks = _mineBlocks;
     gasDelta = _gasDelta;
     emit MEVSettingsUpdated(_mineBlocks, _gasDelta);
@@ -1136,14 +1192,14 @@ contract AntiMEV is ERC20, Ownable {
     );
   }
 
-  function claimFees() external onlyOwner {
+  function claimTokens() external onlyOwner {
     super._transfer(address(this), devWallet, devTokens);
-    super._transfer(address(this), burnWallet, liqTokens);
+    super._transfer(address(this), uniswapV2Pair, liqTokens);
     devTokens = 0;
     liqTokens = 0;
   }
 
-  function setFees(uint16 _devFee, uint16 _liqFee) external onlyOwner {
+  function setFees(uint256 _devFee, uint256 _liqFee) external onlyOwner {
     devFee = _devFee;
     liqFee = _liqFee;
   }
