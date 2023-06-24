@@ -907,25 +907,23 @@ contract AntiMEV is ERC20, Ownable {
 
   uint256 public maxTx;
   uint256 public maxWallet;
-
   uint256 public mineBlocks;
-  uint256 public avgGasPrice;
-  uint256 public gasSampleSize;
-  uint256 public gasDelta;
+
+  uint256 private avgGasPrice;
+  uint256 private gasSampleSize;
+  uint256 private gasDelta;
 
   mapping(address => bool) public bots; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
-  mapping(address => uint256) public lastTxBlock; // last tx block for each address
+  mapping(address => uint256) public lastTxBlock; // block number for address's last tx
 
   IUniswapV2Router02 public uniswapV2Router;
   address public uniswapV2Pair;
+
+  address payable private devWallet;
+  address payable private burnWallet;
+
   uint256 public swapTokensAtAmount;
-
-  address payable private devWallet =
-    payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
-  address payable private burnWallet =
-    payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
-
   bool private inSwap = false;
   modifier lockTheSwap() {
     inSwap = true;
@@ -933,13 +931,14 @@ contract AntiMEV is ERC20, Ownable {
     inSwap = false;
   }
 
-  uint256 public liqTokens; // tokens to be added to liquidity pool
-  uint256 public devTokens; // tokens to be sent to dev wallet
+  uint256 private liqTokens; // tokens to be added to liquidity pool
+  uint256 private devTokens; // tokens to be sent to dev wallet
   uint256 private liqFee = 1; // 1% tax on all transactions going to liquidity
   uint256 private devFee = 2; // 2% tax on all transactions going to dev wallet
 
   event Burn(address indexed user, uint256 amount);
   event VIPAdded(address indexed account, bool isVIP);
+  event BotAdded(address indexed account, bool isBot);
   event MEVSettingsUpdated(uint256 mineBlocks, uint256 gasDelta);
   event UpdatedWallets(address indexed devWallet, address indexed burnWallet);
   event SwapAndLiquify(
@@ -956,8 +955,8 @@ contract AntiMEV is ERC20, Ownable {
     swapTokensAtAmount = _totalSupply.mul(5).div(10000); // 0.05% of total supply
 
     mineBlocks = 3; // 3 blocks must be mined before 2nd tx
-    gasDelta = 5; // 5% increase in gas price considered bribe
-    gasSampleSize = 1; // used to calculate rolling average gas price
+    gasDelta = 10; // 10% increase in gas price considered bribe
+    gasSampleSize = 1; // counter used to calculate rolling average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -968,6 +967,9 @@ contract AntiMEV is ERC20, Ownable {
       address(this),
       _uniswapV2Router.WETH()
     );
+
+    devWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
+    burnWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
 
     setVIP(msg.sender, true);
     setVIP(address(this), true);
@@ -995,12 +997,6 @@ contract AntiMEV is ERC20, Ownable {
       avgGasPrice = tx.gasprice;
       gasSampleSize = 1;
     }
-    // detect bribes by checking if gas price difference too high
-    if (tx.gasprice >= avgGasPrice + avgGasPrice.mul(gasDelta).div(100)) {
-      revert(
-        "AntiMEV: Gas price difference too high, possible frontrun detected"
-      );
-    }
     console.log("tx.gasprice: %s  %s", tx.gasprice, gasSampleSize);
     console.log("** avgGasPrice: %s  %s", avgGasPrice, gasSampleSize);
     console.log("---------------------------");
@@ -1022,45 +1018,77 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
-  function handleBuys(address to) private {
+  function handleBuys(address from, address to) private {
     // handle buys
-    if (msg.sender == uniswapV2Pair && to != address(uniswapV2Router)) {
-      // defend against sandwich attacks using block number
-      if (block.number > lastTxBlock[to] + mineBlocks) {
-        lastTxBlock[to] = block.number;
-      } else {
-        // add to bots
-        bots[to] = true;
-        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
-      }
+    if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
+    // defend against sandwich attacks using block number
+    if (block.number > lastTxBlock[to] + mineBlocks) {
+      lastTxBlock[to] = block.number;
+    } else if (block.number == lastTxBlock[to]) {
+      // allow but add to bots
+      bots[to] = true;
+      emit BotAdded(to, true);
+    } else {
+      revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
+
+    // detect bribes by checking if gas price is higher than rolling average
+    if (tx.gasprice >= avgGasPrice + avgGasPrice.mul(gasDelta).div(100)) {
+      revert(
+        "AntiMEV: Gas price difference too high, possible frontrun detected"
+      );
+    }
+    }
+
+    console.log(
+      "to: %s lastTxBlock: %s gasprice: %s",
+      to,
+      lastTxBlock[to],
+      tx.gasprice
+    );
   }
 
-  function handleSells(address to) private {
+  function handleSells(address from, address to) private {
     // handle sells
-    if (to == uniswapV2Pair && msg.sender != address(uniswapV2Router)) {
-      // defend against sandwich attacks using block number
-      if (block.number > lastTxBlock[msg.sender] + mineBlocks) {
-        lastTxBlock[msg.sender] = block.number;
-      } else {
-        // add to bots
-        bots[msg.sender] = true;
-        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
-      }
+    if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
+    // defend against sandwich attacks using block number
+    if (block.number > lastTxBlock[from] + mineBlocks) {
+      lastTxBlock[from] = block.number;
+    } else if (block.number == lastTxBlock[from]) {
+      // add to bots
+      bots[from] = true;
+      emit BotAdded(from, true);
+      revert("AntiMEV: Sandwich attack detected, added to bots");
+    } else {
+      revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
+
+    // detect bribes by checking if gas price is higher than rolling average
+    if (tx.gasprice >= avgGasPrice + avgGasPrice.mul(gasDelta).div(100)) {
+      revert(
+        "AntiMEV: Gas price difference too high, possible frontrun detected"
+      );
+    }
+    }
+
+    console.log(
+      "from: %s lastTxBlock: %s gasprice: %s",
+      from,
+      lastTxBlock[from],
+      tx.gasprice
+    );
   }
 
   function transfer(address to, uint256 amount) public override returns (bool) {
-    // handle buys
-    handleBuys(to);
-
-    // handle sells
-    handleSells(to);
-
     // calculate rolling average of gas price
     updateGasPrice();
 
-    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+    // handle buys
+    handleBuys(msg.sender, to);
+
+    // handle sells
+    handleSells(msg.sender, to);
+
     return super.transfer(to, amount);
   }
 
@@ -1069,16 +1097,15 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) public override returns (bool) {
-    // handle buys
-    handleBuys(to);
-
-    // handle sells
-    handleSells(to);
-
     // calculate rolling average of gas price
     updateGasPrice();
 
-    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+    // handle buys
+    handleBuys(from, to);
+
+    // handle sells
+    handleSells(from, to);
+
     return super.transferFrom(from, to, amount);
   }
 
@@ -1088,9 +1115,16 @@ contract AntiMEV is ERC20, Ownable {
     emit MEVSettingsUpdated(_mineBlocks, _gasDelta);
   }
 
-  function setVars(uint256 _maxTx, uint256 _maxWallet) external onlyOwner {
+  function setVars(
+    uint256 _maxTx,
+    uint256 _maxWallet,
+    uint256 _devFee,
+    uint256 _liqFee
+  ) external onlyOwner {
     maxTx = _maxTx;
     maxWallet = _maxWallet;
+    devFee = _devFee;
+    liqFee = _liqFee;
   }
 
   function setVIP(address _address, bool _isVIP) public onlyOwner {
@@ -1127,11 +1161,6 @@ contract AntiMEV is ERC20, Ownable {
     super._transfer(address(this), uniswapV2Pair, liqTokens);
     devTokens = 0;
     liqTokens = 0;
-  }
-
-  function setFees(uint256 _devFee, uint256 _liqFee) external onlyOwner {
-    devFee = _devFee;
-    liqFee = _liqFee;
   }
 
   function setWallets(

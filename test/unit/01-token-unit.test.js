@@ -41,7 +41,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         beforeEach(async () => {
           await ourToken.approve(deployer, tokensToSend)
-          await ourToken.setMEV(3, 5)
+          await ourToken.approve(user1, tokensToSend)
+          await ourToken.setMEV(3, 1)
         })
 
         it("Should calculate the average gas price of 10 transfers", async () => {
@@ -60,12 +61,18 @@ const { developmentChains } = require("../../helper-hardhat-config")
             const transferGasCost = gasUsed.mul(effectiveGasPrice)
 
             console.log(`gasUsed ${i}: ${gasUsed}`)
-            console.log("---------------------------")
-
             console.log(`effectiveGasPrice ${i}: ${effectiveGasPrice}`)
             console.log(`transferGasCost ${i}: ${transferGasCost}`)
             console.log("---------------------------")
           }
+        })
+
+        it("Should revert if gas bribe is detected", async () => {
+          await expect(
+            ourToken.transfer(user1, tokensToSend, {
+              gasPrice: ethers.utils.parseUnits("50000", "gwei"),
+            })
+          ).to.be.revertedWith("AntiMEV: Gas bribe detected")
         })
       })
 
