@@ -998,7 +998,7 @@ contract AntiMEV is ERC20, Ownable {
       revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
     // }
-    
+
     // handle sells
     // if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
     if (block.number > lastTxBlock[from] + mineBlocks) {
