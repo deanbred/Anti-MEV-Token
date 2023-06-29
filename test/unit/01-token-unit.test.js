@@ -5,11 +5,25 @@ const { developmentChains } = require("../../helper-hardhat-config")
 !developmentChains.includes(network.name)
   ? describe.skip
   : describe("Token Unit Test", function () {
-      let ourToken, deployer, user1
+      let ourToken,
+        deployer,
+        user1,
+        mineBlocks,
+        gasDelta,
+        maxSample,
+        averageGasPrice,
+        tokensToSend
       beforeEach(async function () {
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
         user1 = accounts.user1
+
+        mineBlocks = 3
+        gasDelta = 20
+        maxSample = 10
+        averageGasPrice = 0
+
+        tokensToSend = ethers.utils.parseEther("1")
 
         await deployments.fixture("all")
         ourToken = await hre.ethers.getContract("AntiMEV", deployer)
@@ -37,18 +51,16 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
       describe("* Gas Bribes *", () => {
-        const tokensToSend = ethers.utils.parseEther("1")
-
         beforeEach(async () => {
           await ourToken.approve(deployer, tokensToSend)
           await ourToken.approve(user1, tokensToSend)
         })
 
         it("Should calculate the average gas price of 10 transfers", async () => {
-          for (let i = 2; i < 21; i++) {
-            await ethers.provider.send("evm_mine", [])
-            await ethers.provider.send("evm_mine", [])
-            await ethers.provider.send("evm_mine", [])
+          for (let i = 1; i < 11; i++) {
+            for (let j = 0; j < mineBlocks; j++) {
+              await ethers.provider.send("evm_mine")
+            }
 
             const transactionResponse = await ourToken.transfer(
               user1,
@@ -73,27 +85,31 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
 
         it("Should revert if gas bribe is detected", async () => {
-          const mineBlocks = 3
-          const gasDelta = 20
-          const maxSample = 10
-          await ourToken.setMEV(mineBlocks, gasDelta, maxSample)
+          await ourToken.setMEV(
+            mineBlocks,
+            gasDelta,
+            maxSample,
+            averageGasPrice
+          )
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
           console.log(`* maxSample: ${maxSample}`)
+          console.log(`* averageGasPrice: ${averageGasPrice}`)
 
           const transactionResponse = await ourToken.transfer(
             user1,
             tokensToSend
           )
-          await ethers.provider.send("evm_mine", [])
-          await ethers.provider.send("evm_mine", [])
-          await ethers.provider.send("evm_mine", [])
+
+          for (let j = 0; j < mineBlocks; j++) {
+            await ethers.provider.send("evm_mine")
+          }
 
           const transactionReceipt = await transactionResponse.wait()
           const { gasUsed, effectiveGasPrice } = transactionReceipt
           const transferGasCost = gasUsed.mul(effectiveGasPrice)
           const bribe = effectiveGasPrice.add(
-            effectiveGasPrice.mul(gasDelta + 33).div(100)
+            effectiveGasPrice.mul(gasDelta + 40).div(100)
           )
 
           console.log(`gasUsed: ${ethers.utils.commify(gasUsed)}`)
@@ -117,7 +133,6 @@ const { developmentChains } = require("../../helper-hardhat-config")
       })
 
       describe("Transfers", () => {
-        const tokensToSend = ethers.utils.parseEther("1")
         const halfToSend = ethers.utils.parseEther("0.5")
         // BigNumber.from("50").mul(BigNumber.from("10").pow(18))
 
@@ -131,41 +146,51 @@ const { developmentChains } = require("../../helper-hardhat-config")
           const endBalance = await ourToken.balanceOf(user1)
           console.log(`* endBalance: ${endBalance}`)
         })
+
         it("Should prevent 2 transfers in the same block", async () => {
           await ourToken.transfer(user1, tokensToSend)
+
           await expect(
             ourToken.transfer(user1, tokensToSend)
           ).to.be.revertedWith(
             "AntiMEV: Transfers too frequent, possible sandwich attack"
           )
         })
+
         it("Should allow 2 transfers after block delay", async () => {
           await ourToken.transfer(user1, tokensToSend)
-          for (let i = 0; i < 5; i++) {
+
+          for (let i = 0; i < mineBlocks; i++) {
             await ethers.provider.send("evm_mine", [])
           }
+
           await expect(ourToken.transfer(user1, tokensToSend)).to.not.be
             .reverted
         })
+
         it("Should prevent 2 transferFroms in the same block", async () => {
           await ourToken.approve(deployer, tokensToSend)
           await ourToken.transferFrom(deployer, user1, tokensToSend)
-          await network.provider.send("evm_mine", [])
+
           await expect(
             ourToken.transferFrom(deployer, user1, tokensToSend)
           ).to.be.revertedWith(
             "AntiMEV: Transfers too frequent, possible sandwich attack"
           )
         })
+
         it("Should allow 2 transferFroms after block delay", async () => {
           await ourToken.approve(deployer, tokensToSend)
           await ourToken.transferFrom(deployer, user1, halfToSend)
-          for (let i = 0; i < 5; i++) {
-            await ethers.provider.send("evm_mine", [])
+
+          for (let j = 0; j < mineBlocks; j++) {
+            await ethers.provider.send("evm_mine")
           }
+
           await expect(ourToken.transferFrom(deployer, user1, halfToSend)).to
             .not.be.reverted
         })
+
         it("Emits an transfer event when an transfer occurs", async () => {
           await expect(ourToken.transfer(user1, tokensToSend)).to.emit(
             ourToken,
@@ -186,6 +211,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log(`* Allowance from contract: ${allowance}`)
           assert.equal(allowance.toString(), tokensToSpend)
         })
+
         it("Should approve other address to spend token", async () => {
           await ourToken.approve(user1, tokensToSpend)
           const allowance = await ourToken.allowance(deployer, user1)
@@ -195,6 +221,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
           expect(await playerToken.balanceOf(user1)).to.equal(tokensToSpend)
           console.log(`* Tokens approved from contract: ${tokensToSpend}`)
         })
+
         it("Does not allow an unnaproved member to do transfers", async () => {
           await expect(
             playerToken.transferFrom(deployer, user1, tokensToSpend)
@@ -207,6 +234,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
             playerToken.transferFrom(deployer, user1, overDraft)
           ).to.be.revertedWith("ERC20: insufficient allowance")
         })
+
         it("Emits an approval event when an approval occurs", async () => {
           await expect(ourToken.approve(user1, tokensToSpend)).to.emit(
             ourToken,

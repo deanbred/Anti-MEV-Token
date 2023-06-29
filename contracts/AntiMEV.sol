@@ -6,7 +6,7 @@
 
   Telegram: https://t.me/antimev
 */
-import "hardhat/console.sol";
+//import "hardhat/console.sol";
 
 pragma solidity ^0.8.17;
 
@@ -873,18 +873,19 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
+  bool public detectMEV;
   uint256 public maxTx;
   uint256 public maxWallet;
   uint256 public mineBlocks;
   uint256 public gasDelta;
   uint256 public maxSample;
 
-  uint256 private avgGasPrice;
-  uint256 private gasCounter;
+  uint256 public avgGasPrice;
+  uint256 public gasCounter;
 
   mapping(address => bool) public bots; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
-  mapping(address => uint256) public lastTxBlock; // block number for address's last tx
+  mapping(address => uint256) private lastTxBlock; // block number for address's last tx
 
   IUniswapV2Router02 public uniswapV2Router;
   address public uniswapV2Pair;
@@ -896,7 +897,12 @@ contract AntiMEV is ERC20, Ownable {
   event Burned(address indexed user, uint256 amount);
   event VIPAdded(address indexed account, bool isVIP);
   event BotAdded(address indexed account, bool isBot);
-  event MEVUpdated(uint256 mineBlocks, uint256 gasDelta, uint256 maxSample);
+  event MEVUpdated(
+    uint256 mineBlocks,
+    uint256 gasDelta,
+    uint256 maxSample,
+    uint256 avgGasPrice
+  );
   event VarsUpdated(uint256 maxTx, uint256 maxWallet);
   event WalletsUpdated(
     address indexed devWallet,
@@ -910,10 +916,12 @@ contract AntiMEV is ERC20, Ownable {
     maxWallet = _totalSupply.mul(3).div(100); // 3% of total supply
     maxTx = _totalSupply.mul(15).div(1000); // 1.5% of total supply
 
-    mineBlocks = 3; // 3 blocks must be mined before 2nd tx
-    gasDelta = 20; // 20% increase in gas price considered bribe
+    detectMEV = true; // enable MEV detection
+    mineBlocks = 3; // blocks must be mined before 2nd tx
+    avgGasPrice = 0; // rolling average gas price
+    gasDelta = 20; // increase in gas price to be considered bribe
     maxSample = 10; // number of blocks to calculate rolling average gas price
-    gasCounter = 1; // counter used to calculate rolling average gas price
+    gasCounter = 0; // counter used to calculate rolling average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -925,8 +933,8 @@ contract AntiMEV is ERC20, Ownable {
       _uniswapV2Router.WETH()
     );
 
-    devWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
-    burnWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
+    devWallet = payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
+    burnWallet = payable(0x8B30998a9492610F074784Aed7aFDd682B23B416);
     airdropWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
 
     setVIP(msg.sender, true);
@@ -941,32 +949,6 @@ contract AntiMEV is ERC20, Ownable {
     _mint(devWallet, _totalSupply.mul(4).div(100)); // 4% of total supply
     _mint(burnWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
     _mint(airdropWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
-  }
-
-  // calculate rolling average of gas price for last 10 txs
-  function detectGasBribe() public {
-    avgGasPrice =
-      (avgGasPrice * (gasCounter - 1)) /
-      gasCounter +
-      tx.gasprice /
-      gasCounter;
-
-    gasCounter += 1;
-    // reset avgGasPrice if sample size too large
-    if (gasCounter > maxSample) {
-      avgGasPrice = tx.gasprice;
-      gasCounter = 1;
-    }
-
-    // detect bribes by checking if gas price is higher than rolling average
-    if (tx.gasprice >= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100))) {
-      revert("AntiMEV: Gas bribe detected, possible front-run");
-    }
-
-    uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
-    console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
-    console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);
-    console.log("bribe.Price: %s  %s", bribe, gasCounter);
   }
 
   function _beforeTokenTransfer(
@@ -985,6 +967,35 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
+  // calculate rolling average of gas price for last maxSample blocks
+  function detectGasBribe() public {
+    gasCounter += 1;
+    avgGasPrice =
+      (avgGasPrice * (gasCounter - 1)) /
+      gasCounter +
+      tx.gasprice /
+      gasCounter;
+
+    // reset avgGasPrice if sample size too large
+    if (gasCounter > maxSample) {
+      avgGasPrice = tx.gasprice;
+      gasCounter = 0;
+    }
+
+    // detect bribes by checking if gas price is higher than rolling average
+    if (
+      tx.gasprice >= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)) &&
+      gasCounter > 1
+    ) {
+      revert("AntiMEV: Gas bribe detected, possible front-run");
+    }
+
+    /*     uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
+    console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
+    console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);
+    console.log("bribe.Price: %s  %s", bribe, gasCounter); */
+  }
+
   function detectSandwich(address from, address to) private {
     // handle buys
     //if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
@@ -992,36 +1003,41 @@ contract AntiMEV is ERC20, Ownable {
       lastTxBlock[to] = block.number;
     } else if (block.number == lastTxBlock[to]) {
       // allow but add to bots
-      bots[to] = true;
-      emit BotAdded(to, true);
+      if (!isVIP[to]) {
+        bots[to] = true;
+        emit BotAdded(to, true);
+      }
     } else {
       revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
-    // }
+    //}
 
     // handle sells
-    // if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
+    //  if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
     if (block.number > lastTxBlock[from] + mineBlocks) {
       lastTxBlock[from] = block.number;
     } else if (block.number == lastTxBlock[from]) {
       // add to bots
-      bots[from] = true;
-      emit BotAdded(from, true);
+      if (!isVIP[from]) {
+        bots[from] = true;
+        emit BotAdded(from, true);
+      }
       revert("AntiMEV: Sandwich attack detected, added to bots");
     } else {
       revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
     // }
-    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
-    console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
+    /*     console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+    console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]); */
   }
 
   function transfer(address to, uint256 amount) public override returns (bool) {
-    // test for frontrunner
-    detectGasBribe();
-    // test for sandwich attack
-    detectSandwich(msg.sender, to);
-
+    if (detectMEV) {
+      // test for frontrunner
+      detectGasBribe();
+      // test for sandwich attack
+      detectSandwich(msg.sender, to);
+    }
     return super.transfer(to, amount);
   }
 
@@ -1030,23 +1046,34 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) public override returns (bool) {
-    // test for frontrunner
-    detectGasBribe();
-    // test for sandwich attack
-    detectSandwich(from, to);
-
+    if (detectMEV) {
+      // test for frontrunner
+      detectGasBribe();
+      // test for sandwich attack
+      detectSandwich(from, to);
+    }
     return super.transferFrom(from, to, amount);
+  }
+
+  function setDetectMEV(bool _detectMEV) external onlyOwner {
+    detectMEV = _detectMEV;
+  }
+
+  function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {
+    uniswapV2Pair = _uniswapV2Pair;
   }
 
   function setMEV(
     uint256 _mineBlocks,
     uint256 _gasDelta,
-    uint256 _maxSample
+    uint256 _maxSample,
+    uint256 _avgGasPrice
   ) external onlyOwner {
     mineBlocks = _mineBlocks;
     gasDelta = _gasDelta;
     maxSample = _maxSample;
-    emit MEVUpdated(_mineBlocks, _gasDelta, _maxSample);
+    avgGasPrice = _avgGasPrice;
+    emit MEVUpdated(_mineBlocks, _gasDelta, _maxSample, _avgGasPrice);
   }
 
   function setVars(uint256 _maxTx, uint256 _maxWallet) external onlyOwner {
