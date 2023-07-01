@@ -61,14 +61,14 @@ module.exports = {
     },
   },
   gasReporter: {
-    enabled: process.env.REPORT_GAS ? true : false,
+    enabled: false,
     currency: "USD",
     outputFile: "gas-report.txt",
     noColors: true,
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   contractSizer: {
-    runOnCompile: process.env.CONTRACT_SIZER ? true : false,
+    runOnCompile: false,
     strict: true,
     only: [],
     outputFile: "contract-sizer.txt",

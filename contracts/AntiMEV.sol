@@ -6,7 +6,7 @@
 
   Telegram: https://t.me/antimev
 */
-//import "hardhat/console.sol";
+import "hardhat/console.sol";
 
 pragma solidity ^0.8.17;
 
@@ -885,7 +885,7 @@ contract AntiMEV is ERC20, Ownable {
 
   mapping(address => bool) public bots; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
-  mapping(address => uint256) private lastTxBlock; // block number for address's last tx
+  mapping(address => uint256) public lastTxBlock; // block number for address's last tx
 
   IUniswapV2Router02 public uniswapV2Router;
   address public uniswapV2Pair;
@@ -912,9 +912,8 @@ contract AntiMEV is ERC20, Ownable {
 
   constructor() payable ERC20("AntiMEV", "AntiMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
-
-    maxWallet = _totalSupply.mul(3).div(100); // 3% of total supply
-    maxTx = _totalSupply.mul(15).div(1000); // 1.5% of total supply
+    maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
+    maxTx = _totalSupply.mul(33).div(1000); // 3.3% of total supply
 
     detectMEV = true; // enable MEV detection
     mineBlocks = 3; // blocks must be mined before 2nd tx
@@ -951,24 +950,8 @@ contract AntiMEV is ERC20, Ownable {
     _mint(airdropWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
   }
 
-  function _beforeTokenTransfer(
-    address from,
-    address to,
-    uint256 amount
-  ) internal virtual override {
-    // check if VIP
-    if (!isVIP[from] && !isVIP[to]) {
-      // check if known MEV bot
-      require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
-      // check if max tx amount exceeded
-      require(amount <= maxTx, "Max transaction exceeded!");
-      // check if max wallet amount exceeded
-      require(super.balanceOf(to) + amount <= maxWallet, "Max wallet exceeded");
-    }
-  }
-
   // calculate rolling average of gas price for last maxSample blocks
-  function detectGasBribe() public {
+  function detectGasBribe() private {
     gasCounter += 1;
     avgGasPrice =
       (avgGasPrice * (gasCounter - 1)) /
@@ -990,10 +973,10 @@ contract AntiMEV is ERC20, Ownable {
       revert("AntiMEV: Gas bribe detected, possible front-run");
     }
 
-    /*     uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
+    uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
     console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
     console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);
-    console.log("bribe.Price: %s  %s", bribe, gasCounter); */
+    console.log("bribe.Price: %s  %s", bribe, gasCounter);
   }
 
   function detectSandwich(address from, address to) private {
@@ -1027,17 +1010,32 @@ contract AntiMEV is ERC20, Ownable {
       revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
     // }
-    /*     console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
-    console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]); */
+    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+    console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
+  }
+
+  function checkLimits(
+    address from,
+    address to,
+    uint256 amount
+  ) private view returns (bool) {
+    // if (!isVIP[from] && !isVIP[to]) {
+    console.log("AntiMEV: Not VIP");
+    require(amount <= maxTx, "Max transaction exceeded!");
+    require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
+    require(super.balanceOf(to) + amount <= maxWallet, "Max wallet exceeded!");
+    // }
+    return true;
   }
 
   function transfer(address to, uint256 amount) public override returns (bool) {
     if (detectMEV) {
-      // test for frontrunner
-      detectGasBribe();
       // test for sandwich attack
       detectSandwich(msg.sender, to);
+      // test for frontrunner
+      detectGasBribe();
     }
+    checkLimits(msg.sender, to, amount);
     return super.transfer(to, amount);
   }
 
@@ -1047,20 +1045,17 @@ contract AntiMEV is ERC20, Ownable {
     uint256 amount
   ) public override returns (bool) {
     if (detectMEV) {
-      // test for frontrunner
-      detectGasBribe();
       // test for sandwich attack
       detectSandwich(from, to);
+      // test for frontrunner
+      detectGasBribe();
     }
+    checkLimits(from, to, amount);
     return super.transferFrom(from, to, amount);
   }
 
   function setDetectMEV(bool _detectMEV) external onlyOwner {
     detectMEV = _detectMEV;
-  }
-
-  function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {
-    uniswapV2Pair = _uniswapV2Pair;
   }
 
   function setMEV(
@@ -1080,6 +1075,10 @@ contract AntiMEV is ERC20, Ownable {
     maxTx = _maxTx;
     maxWallet = _maxWallet;
     emit VarsUpdated(_maxTx, _maxWallet);
+  }
+
+  function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {
+    uniswapV2Pair = _uniswapV2Pair;
   }
 
   function setVIP(address _address, bool _isVIP) public onlyOwner {

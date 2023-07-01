@@ -5,7 +5,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
 !developmentChains.includes(network.name)
   ? describe.skip
   : describe("Token Unit Test", function () {
-      let ourToken,
+      let AntiMEV,
         deployer,
         user1,
         mineBlocks,
@@ -17,23 +17,21 @@ const { developmentChains } = require("../../helper-hardhat-config")
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
         user1 = accounts.user1
-
         mineBlocks = 3
         gasDelta = 20
-        maxSample = 10
         averageGasPrice = 0
-
-        tokensToSend = ethers.utils.parseEther("1")
+        maxSample = 10
+        tokensToSend = ethers.utils.parseEther("100")
 
         await deployments.fixture("all")
-        ourToken = await hre.ethers.getContract("AntiMEV", deployer)
+        AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
       })
       it("Was deployed successfully ", async () => {
-        assert(ourToken.address)
+        assert(AntiMEV.address)
       })
       describe("constructor", () => {
         it("Has correct supply of tokens ", async () => {
-          const totalSupply = await ourToken.totalSupply()
+          const totalSupply = await AntiMEV.totalSupply()
           console.log(
             `* Supply from contract: ${ethers.utils.commify(
               totalSupply / 1e18
@@ -41,19 +39,19 @@ const { developmentChains } = require("../../helper-hardhat-config")
           )
         })
         it("Initializes the token with the correct name and symbol ", async () => {
-          const name = (await ourToken.name()).toString()
+          const name = (await AntiMEV.name()).toString()
           assert.equal(name, "AntiMEV")
           console.log(`* Name from contract is: ${name}`)
 
-          const symbol = (await ourToken.symbol()).toString()
+          const symbol = (await AntiMEV.symbol()).toString()
           assert.equal(symbol, "AntiMEV")
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
       describe("* Gas Bribes *", () => {
         beforeEach(async () => {
-          await ourToken.approve(deployer, tokensToSend)
-          await ourToken.approve(user1, tokensToSend)
+          await AntiMEV.approve(deployer, tokensToSend)
+          await AntiMEV.approve(user1, tokensToSend)
         })
 
         it("Should calculate the average gas price of 10 transfers", async () => {
@@ -62,7 +60,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
               await ethers.provider.send("evm_mine")
             }
 
-            const transactionResponse = await ourToken.transfer(
+            const transactionResponse = await AntiMEV.transfer(
               user1,
               tokensToSend
             )
@@ -85,18 +83,13 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
 
         it("Should revert if gas bribe is detected", async () => {
-          await ourToken.setMEV(
-            mineBlocks,
-            gasDelta,
-            maxSample,
-            averageGasPrice
-          )
+          await AntiMEV.setMEV(mineBlocks, gasDelta, maxSample, averageGasPrice)
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
           console.log(`* maxSample: ${maxSample}`)
           console.log(`* averageGasPrice: ${averageGasPrice}`)
 
-          const transactionResponse = await ourToken.transfer(
+          const transactionResponse = await AntiMEV.transfer(
             user1,
             tokensToSend
           )
@@ -123,7 +116,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log("---------------------------")
 
           await expect(
-            ourToken.transfer(user1, tokensToSend, {
+            AntiMEV.transfer(user1, tokensToSend, {
               gasPrice: bribe,
             })
           ).to.be.revertedWith(
@@ -134,66 +127,83 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
       describe("Transfers", () => {
         const halfToSend = ethers.utils.parseEther("0.5")
-        // BigNumber.from("50").mul(BigNumber.from("10").pow(18))
+        //const overMaxWallet = ethers.utils.parseEther("12000000000")
 
         it("Should transfer tokens successfully to an address", async () => {
-          const startBalance = await ourToken.balanceOf(user1)
+          const startBalance = await AntiMEV.balanceOf(user1)
           console.log(`* startBalance: ${startBalance}`)
 
-          await ourToken.transfer(user1, tokensToSend)
+          await AntiMEV.transfer(user1, tokensToSend)
 
-          expect(await ourToken.balanceOf(user1)).to.equal(tokensToSend)
-          const endBalance = await ourToken.balanceOf(user1)
+          expect(await AntiMEV.balanceOf(user1)).to.equal(tokensToSend)
+          const endBalance = await AntiMEV.balanceOf(user1)
           console.log(`* endBalance: ${endBalance}`)
         })
 
+        it("Should prevent transfers over maxTx", async () => {
+          const maxTx = await AntiMEV.maxTx()
+          console.log(`* maxTx: ${maxTx}`)
+          await expect(
+            AntiMEV.transfer(user1, maxTx.add(1))
+          ).to.be.revertedWith("Max transaction exceeded!")
+        })
+
+        it("Should prevent transfers over maxWallet", async () => {
+          const maxWallet = await AntiMEV.maxWallet()
+          console.log(`* maxWallet: ${maxWallet}`)
+
+          await AntiMEV.setVars(maxWallet.add(2), maxWallet)
+          await expect(
+            AntiMEV.transfer(user1, maxWallet.add(1))
+          ).to.be.revertedWith("Max wallet exceeded!")
+        })
+
         it("Should prevent 2 transfers in the same block", async () => {
-          await ourToken.transfer(user1, tokensToSend)
+          await AntiMEV.transfer(user1, tokensToSend)
 
           await expect(
-            ourToken.transfer(user1, tokensToSend)
+            AntiMEV.transfer(user1, tokensToSend)
           ).to.be.revertedWith(
             "AntiMEV: Transfers too frequent, possible sandwich attack"
           )
         })
 
         it("Should allow 2 transfers after block delay", async () => {
-          await ourToken.transfer(user1, tokensToSend)
+          await AntiMEV.transfer(user1, tokensToSend)
 
           for (let i = 0; i < mineBlocks; i++) {
             await ethers.provider.send("evm_mine", [])
           }
 
-          await expect(ourToken.transfer(user1, tokensToSend)).to.not.be
-            .reverted
+          await expect(AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
         })
 
         it("Should prevent 2 transferFroms in the same block", async () => {
-          await ourToken.approve(deployer, tokensToSend)
-          await ourToken.transferFrom(deployer, user1, tokensToSend)
+          await AntiMEV.approve(deployer, tokensToSend)
+          await AntiMEV.transferFrom(deployer, user1, tokensToSend)
 
           await expect(
-            ourToken.transferFrom(deployer, user1, tokensToSend)
+            AntiMEV.transferFrom(deployer, user1, tokensToSend)
           ).to.be.revertedWith(
             "AntiMEV: Transfers too frequent, possible sandwich attack"
           )
         })
 
         it("Should allow 2 transferFroms after block delay", async () => {
-          await ourToken.approve(deployer, tokensToSend)
-          await ourToken.transferFrom(deployer, user1, halfToSend)
+          await AntiMEV.approve(deployer, tokensToSend)
+          await AntiMEV.transferFrom(deployer, user1, halfToSend)
 
           for (let j = 0; j < mineBlocks; j++) {
             await ethers.provider.send("evm_mine")
           }
 
-          await expect(ourToken.transferFrom(deployer, user1, halfToSend)).to
-            .not.be.reverted
+          await expect(AntiMEV.transferFrom(deployer, user1, halfToSend)).to.not
+            .be.reverted
         })
 
         it("Emits an transfer event when an transfer occurs", async () => {
-          await expect(ourToken.transfer(user1, tokensToSend)).to.emit(
-            ourToken,
+          await expect(AntiMEV.transfer(user1, tokensToSend)).to.emit(
+            AntiMEV,
             "Transfer"
           )
         })
@@ -206,15 +216,15 @@ const { developmentChains } = require("../../helper-hardhat-config")
           playerToken = await ethers.getContract("AntiMEV", user1)
         })
         it("Allowance is accurately being set", async () => {
-          await ourToken.approve(user1, tokensToSpend)
-          const allowance = await ourToken.allowance(deployer, user1)
+          await AntiMEV.approve(user1, tokensToSpend)
+          const allowance = await AntiMEV.allowance(deployer, user1)
           console.log(`* Allowance from contract: ${allowance}`)
           assert.equal(allowance.toString(), tokensToSpend)
         })
 
         it("Should approve other address to spend token", async () => {
-          await ourToken.approve(user1, tokensToSpend)
-          const allowance = await ourToken.allowance(deployer, user1)
+          await AntiMEV.approve(user1, tokensToSpend)
+          const allowance = await AntiMEV.allowance(deployer, user1)
 
           await playerToken.transferFrom(deployer, user1, tokensToSpend)
 
@@ -229,15 +239,15 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
 
         it("Does not allow a user to go over the allowance", async () => {
-          await ourToken.approve(user1, tokensToSpend)
+          await AntiMEV.approve(user1, tokensToSpend)
           await expect(
             playerToken.transferFrom(deployer, user1, overDraft)
           ).to.be.revertedWith("ERC20: insufficient allowance")
         })
 
         it("Emits an approval event when an approval occurs", async () => {
-          await expect(ourToken.approve(user1, tokensToSpend)).to.emit(
-            ourToken,
+          await expect(AntiMEV.approve(user1, tokensToSpend)).to.emit(
+            AntiMEV,
             "Approval"
           )
         })
