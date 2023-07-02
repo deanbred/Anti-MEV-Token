@@ -48,6 +48,15 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
+      describe("Bot Protection", () => {
+        it("Should prevent bots from buying", async () => {
+          await AntiMEV.setBots([user1], [true])
+          await expect(
+            AntiMEV.transfer(user1, tokensToSend)
+          ).to.be.revertedWith("AntiMEV: Known MEV bot")
+        })
+      })
+
       describe("* Gas Bribes *", () => {
         beforeEach(async () => {
           await AntiMEV.approve(deployer, tokensToSend)
@@ -139,19 +148,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log(`* endBalance: ${endBalance}`)
         })
 
-        it("Should prevent transfers over maxTx", async () => {
-          const maxTx = await AntiMEV.maxTx()
-          console.log(`* maxTx: ${maxTx}`)
-          await expect(
-            AntiMEV.transfer(user1, maxTx.add(1))
-          ).to.be.revertedWith("Max transaction exceeded!")
-        })
-
         it("Should prevent transfers over maxWallet", async () => {
           const maxWallet = await AntiMEV.maxWallet()
           console.log(`* maxWallet: ${maxWallet}`)
 
-          await AntiMEV.setVars(maxWallet.add(2), maxWallet)
           await expect(
             AntiMEV.transfer(user1, maxWallet.add(1))
           ).to.be.revertedWith("Max wallet exceeded!")

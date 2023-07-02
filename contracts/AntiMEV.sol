@@ -874,14 +874,13 @@ contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
   bool public detectMEV;
-  uint256 public maxTx;
   uint256 public maxWallet;
   uint256 public mineBlocks;
   uint256 public gasDelta;
   uint256 public maxSample;
 
   uint256 public avgGasPrice;
-  uint256 public gasCounter;
+  uint256 private gasCounter;
 
   mapping(address => bool) public isBOT; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
@@ -903,7 +902,6 @@ contract AntiMEV is ERC20, Ownable {
     uint256 maxSample,
     uint256 avgGasPrice
   );
-  event VarsUpdated(uint256 maxTx, uint256 maxWallet);
   event WalletsUpdated(
     address indexed devWallet,
     address indexed burnWallet,
@@ -913,7 +911,6 @@ contract AntiMEV is ERC20, Ownable {
   constructor() payable ERC20("AntiMEV", "AntiMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
     maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
-    maxTx = _totalSupply.mul(33).div(1000); // 3.3% of total supply
 
     detectMEV = true; // enable MEV detection
     mineBlocks = 3; // blocks must be mined before 2nd tx
@@ -981,7 +978,7 @@ contract AntiMEV is ERC20, Ownable {
 
   function detectSandwich(address from, address to) private {
     // handle buys
-    if (from == uniswapV2Pair || !isVIP[to]) {
+    if (from == uniswapV2Pair && !isVIP[to]) {
       if (block.number > lastTxBlock[to] + mineBlocks) {
         lastTxBlock[to] = block.number;
       } else if (block.number == lastTxBlock[to]) {
@@ -995,7 +992,7 @@ contract AntiMEV is ERC20, Ownable {
     }
 
     // handle sells
-    if (to == uniswapV2Pair || !isVIP[from]) {
+    if (to == uniswapV2Pair && !isVIP[from]) {
       if (block.number > lastTxBlock[from] + mineBlocks) {
         lastTxBlock[from] = block.number;
       } else if (block.number == lastTxBlock[from]) {
@@ -1012,21 +1009,18 @@ contract AntiMEV is ERC20, Ownable {
     console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
   }
 
-  function checkLimits(
+  function _beforeTokenTransfer(
     address from,
     address to,
     uint256 amount
-  ) private view returns (bool) {
-    if (!isVIP[from] && !isVIP[to]) {
-      console.log("AntiMEV: Not VIP");
-      require(amount <= maxTx, "Max transaction exceeded!");
-      require(!isBOT[to] && !isBOT[from], "AntiMEV: Known MEV bot");
+  ) internal virtual override {
+    require(!isBOT[to] && !isBOT[from], "AntiMEV: Known MEV bot");
+    if (from == uniswapV2Pair && !isVIP[to]) {
       require(
         super.balanceOf(to) + amount <= maxWallet,
         "Max wallet exceeded!"
       );
     }
-    return true;
   }
 
   function transfer(address to, uint256 amount) public override returns (bool) {
@@ -1036,7 +1030,6 @@ contract AntiMEV is ERC20, Ownable {
       // test for frontrunner
       detectGasBribe(msg.sender, to);
     }
-    checkLimits(msg.sender, to, amount);
     return super.transfer(to, amount);
   }
 
@@ -1051,7 +1044,6 @@ contract AntiMEV is ERC20, Ownable {
       // test for frontrunner
       detectGasBribe(from, to);
     }
-    checkLimits(from, to, amount);
     return super.transferFrom(from, to, amount);
   }
 
@@ -1072,12 +1064,6 @@ contract AntiMEV is ERC20, Ownable {
     emit MEVUpdated(_mineBlocks, _gasDelta, _maxSample, _avgGasPrice);
   }
 
-  function setVars(uint256 _maxTx, uint256 _maxWallet) external onlyOwner {
-    maxTx = _maxTx;
-    maxWallet = _maxWallet;
-    emit VarsUpdated(_maxTx, _maxWallet);
-  }
-
   function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {
     uniswapV2Pair = _uniswapV2Pair;
   }
@@ -1092,7 +1078,13 @@ contract AntiMEV is ERC20, Ownable {
     bool[] memory _isBot
   ) external onlyOwner {
     for (uint256 i = 0; i < _address.length; i++) {
-      require(_address[i] != address(this) && _address[i] != owner());
+      require(
+        _address[i] != owner() &&
+          _address[i] != address(this) &&
+          _address[i] != uniswapV2Pair &&
+          _address[i] != address(uniswapV2Router),
+        "AntiMEV: Invalid address"
+      );
       isBOT[_address[i]] = _isBot[i];
       emit BotAdded(_address[i], _isBot[i]);
     }
@@ -1107,6 +1099,10 @@ contract AntiMEV is ERC20, Ownable {
     burnWallet = payable(_burnWallet);
     airdropWallet = payable(_airdropWallet);
     emit WalletsUpdated(devWallet, burnWallet, airdropWallet);
+  }
+
+  function setMaxWallet(uint256 _maxWallet) external onlyOwner {
+    maxWallet = _maxWallet;
   }
 
   function burn(uint256 value) external onlyOwner {
