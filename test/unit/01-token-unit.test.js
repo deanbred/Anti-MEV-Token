@@ -21,7 +21,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         gasDelta = 20
         averageGasPrice = 0
         maxSample = 10
-        tokensToSend = ethers.utils.parseEther("100")
+        tokensToSend = ethers.utils.parseEther("10")
 
         await deployments.fixture("all")
         AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
@@ -127,7 +127,6 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
       describe("Transfers", () => {
         const halfToSend = ethers.utils.parseEther("0.5")
-        //const overMaxWallet = ethers.utils.parseEther("12000000000")
 
         it("Should transfer tokens successfully to an address", async () => {
           const startBalance = await AntiMEV.balanceOf(user1)

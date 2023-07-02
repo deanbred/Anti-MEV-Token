@@ -883,7 +883,7 @@ contract AntiMEV is ERC20, Ownable {
   uint256 public avgGasPrice;
   uint256 public gasCounter;
 
-  mapping(address => bool) public bots; // MEV bots
+  mapping(address => bool) public isBOT; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
   mapping(address => uint256) public lastTxBlock; // block number for address's last tx
 
@@ -918,7 +918,7 @@ contract AntiMEV is ERC20, Ownable {
     detectMEV = true; // enable MEV detection
     mineBlocks = 3; // blocks must be mined before 2nd tx
     avgGasPrice = 0; // rolling average gas price
-    gasDelta = 20; // increase in gas price to be considered bribe
+    gasDelta = 30; // increase in gas price to be considered bribe
     maxSample = 10; // number of blocks to calculate rolling average gas price
     gasCounter = 0; // counter used to calculate rolling average gas price
 
@@ -936,7 +936,6 @@ contract AntiMEV is ERC20, Ownable {
     burnWallet = payable(0x8B30998a9492610F074784Aed7aFDd682B23B416);
     airdropWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
 
-    setVIP(msg.sender, true);
     setVIP(address(this), true);
     setVIP(address(devWallet), true);
     setVIP(address(burnWallet), true);
@@ -944,14 +943,14 @@ contract AntiMEV is ERC20, Ownable {
     setVIP(address(uniswapV2Pair), true);
     setVIP(address(uniswapV2Router), true);
 
-    _mint(msg.sender, _totalSupply.mul(90).div(100)); // 90% of total supply
-    _mint(devWallet, _totalSupply.mul(4).div(100)); // 4% of total supply
+    _mint(msg.sender, _totalSupply.mul(91).div(100)); // 91% of total supply
+    _mint(devWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
     _mint(burnWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
     _mint(airdropWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
   }
 
   // calculate rolling average of gas price for last maxSample blocks
-  function detectGasBribe() private {
+  function detectGasBribe(address from, address to) private {
     gasCounter += 1;
     avgGasPrice =
       (avgGasPrice * (gasCounter - 1)) /
@@ -966,13 +965,14 @@ contract AntiMEV is ERC20, Ownable {
     }
 
     // detect bribes by checking if gas price is higher than rolling average
-    if (
-      tx.gasprice >= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)) &&
-      gasCounter > 1
-    ) {
-      revert("AntiMEV: Gas bribe detected, possible front-run");
+    if (!isVIP[from] && !isVIP[to]) {
+      if (
+        tx.gasprice >= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)) &&
+        gasCounter > 1
+      ) {
+        revert("AntiMEV: Gas bribe detected, possible front-run");
+      }
     }
-
     uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
     console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
     console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);
@@ -981,35 +981,33 @@ contract AntiMEV is ERC20, Ownable {
 
   function detectSandwich(address from, address to) private {
     // handle buys
-    //if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
-    if (block.number > lastTxBlock[to] + mineBlocks) {
-      lastTxBlock[to] = block.number;
-    } else if (block.number == lastTxBlock[to]) {
-      // allow but add to bots
-      if (!isVIP[to]) {
-        bots[to] = true;
-        emit BotAdded(to, true);
+    if (from == uniswapV2Pair || !isVIP[to]) {
+      if (block.number > lastTxBlock[to] + mineBlocks) {
+        lastTxBlock[to] = block.number;
+      } else if (block.number == lastTxBlock[to]) {
+        if (!isVIP[to]) {
+          isBOT[to] = true;
+          emit BotAdded(to, true);
+        }
+      } else {
+        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
-    } else {
-      revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
-    //}
 
     // handle sells
-    //  if (to == uniswapV2Pair && from != address(uniswapV2Router)) {
-    if (block.number > lastTxBlock[from] + mineBlocks) {
-      lastTxBlock[from] = block.number;
-    } else if (block.number == lastTxBlock[from]) {
-      // add to bots
-      if (!isVIP[from]) {
-        bots[from] = true;
-        emit BotAdded(from, true);
+    if (to == uniswapV2Pair || !isVIP[from]) {
+      if (block.number > lastTxBlock[from] + mineBlocks) {
+        lastTxBlock[from] = block.number;
+      } else if (block.number == lastTxBlock[from]) {
+        if (!isVIP[from]) {
+          isBOT[from] = true;
+          emit BotAdded(from, true);
+        }
+        revert("AntiMEV: Sandwich attack detected, added to bots");
+      } else {
+        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
-      revert("AntiMEV: Sandwich attack detected, added to bots");
-    } else {
-      revert("AntiMEV: Transfers too frequent, possible sandwich attack");
     }
-    // }
     console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
   }
@@ -1019,12 +1017,15 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) private view returns (bool) {
-    // if (!isVIP[from] && !isVIP[to]) {
-    console.log("AntiMEV: Not VIP");
-    require(amount <= maxTx, "Max transaction exceeded!");
-    require(!bots[to] && !bots[from], "AntiMEV: Known MEV bot");
-    require(super.balanceOf(to) + amount <= maxWallet, "Max wallet exceeded!");
-    // }
+    if (!isVIP[from] && !isVIP[to]) {
+      console.log("AntiMEV: Not VIP");
+      require(amount <= maxTx, "Max transaction exceeded!");
+      require(!isBOT[to] && !isBOT[from], "AntiMEV: Known MEV bot");
+      require(
+        super.balanceOf(to) + amount <= maxWallet,
+        "Max wallet exceeded!"
+      );
+    }
     return true;
   }
 
@@ -1033,7 +1034,7 @@ contract AntiMEV is ERC20, Ownable {
       // test for sandwich attack
       detectSandwich(msg.sender, to);
       // test for frontrunner
-      detectGasBribe();
+      detectGasBribe(msg.sender, to);
     }
     checkLimits(msg.sender, to, amount);
     return super.transfer(to, amount);
@@ -1048,7 +1049,7 @@ contract AntiMEV is ERC20, Ownable {
       // test for sandwich attack
       detectSandwich(from, to);
       // test for frontrunner
-      detectGasBribe();
+      detectGasBribe(from, to);
     }
     checkLimits(from, to, amount);
     return super.transferFrom(from, to, amount);
@@ -1092,7 +1093,7 @@ contract AntiMEV is ERC20, Ownable {
   ) external onlyOwner {
     for (uint256 i = 0; i < _address.length; i++) {
       require(_address[i] != address(this) && _address[i] != owner());
-      bots[_address[i]] = _isBot[i];
+      isBOT[_address[i]] = _isBot[i];
       emit BotAdded(_address[i], _isBot[i]);
     }
   }
