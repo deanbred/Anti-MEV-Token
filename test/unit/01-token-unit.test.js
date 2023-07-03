@@ -59,7 +59,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
 
-      describe("* Gas Bribes *", () => {
+      describe("Gas Bribe Detection", () => {
         beforeEach(async () => {
           await AntiMEV.approve(deployer, tokensToSend)
           await AntiMEV.approve(user1, tokensToSend)

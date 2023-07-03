@@ -859,13 +859,13 @@ contract AntiMEV is ERC20, Ownable {
   uint256 public gasDelta;
   uint256 public maxSample;
   uint256 public avgGasPrice;
-  uint256 public gasCounter;
+  uint256 public txCounter;
 
   mapping(address => bool) public isBOT; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
   mapping(address => uint256) public lastTxBlock; // block number for address's last tx
 
-  IUniswapV2Router02 public immutable uniswapV2Router;
+  IUniswapV2Router02 private immutable uniswapV2Router;
   address public uniswapV2Pair;
 
   address payable private devWallet;
@@ -876,6 +876,7 @@ contract AntiMEV is ERC20, Ownable {
   event VIPAdded(address indexed account, bool isVIP);
   event BotAdded(address indexed account, bool isBot);
   event MEVUpdated(
+    bool detectMEV,
     uint256 mineBlocks,
     uint256 gasDelta,
     uint256 maxSample,
@@ -891,7 +892,7 @@ contract AntiMEV is ERC20, Ownable {
     avgGasPrice = 1000000; // initial rolling average gas price
     gasDelta = 25; // increase in gas price to be considered bribe
     maxSample = 10; // number of blocks to calculate average gas price
-    gasCounter = 0; // counter used to calculate average gas price
+    txCounter = 0; // counter used to calculate average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -921,32 +922,34 @@ contract AntiMEV is ERC20, Ownable {
     _mint(airdropWallet, _totalSupply.mul(3).div(100));
   }
 
-  // calculate rolling average of gas price for last maxSample blocks
+  // use rolling average of gas price to detect gas bribes
   function detectGasBribe(address from, address to) private {
-    gasCounter += 1;
+    // increment first to avoid divide by zero
+    txCounter += 1;
     avgGasPrice =
-      (avgGasPrice * (gasCounter - 1)) /
-      gasCounter +
+      (avgGasPrice * (txCounter - 1)) /
+      txCounter +
       tx.gasprice /
-      gasCounter;
+      txCounter;
 
     // reset avgGasPrice if sample size too large
-    if (gasCounter > maxSample) {
+    if (txCounter > maxSample) {
       avgGasPrice = tx.gasprice;
-      gasCounter = 0;
+      txCounter = 0;
     }
 
     // detect bribes by comparing tx price to rolling average
     if (!isVIP[from] && !isVIP[to]) {
       if (
         tx.gasprice >= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)) &&
-        gasCounter > 1
+        txCounter > 1
       ) {
         revert("AntiMEV: Gas bribe detected, possible front-run");
       }
     }
   }
 
+  // use block number of last tx to detect sandwich attacks
   function detectSandwich(address from, address to) private {
     // handle buy
     if (from == uniswapV2Pair && !isVIP[to]) {
@@ -954,8 +957,7 @@ contract AntiMEV is ERC20, Ownable {
         lastTxBlock[to] = block.number;
       } else if (block.number == lastTxBlock[to]) {
         if (!isVIP[to]) {
-          isBOT[to] = true;
-          emit BotAdded(to, true);
+          setBOT(to, true);
         }
       } else {
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
@@ -968,8 +970,7 @@ contract AntiMEV is ERC20, Ownable {
         lastTxBlock[from] = block.number;
       } else if (block.number == lastTxBlock[from]) {
         if (!isVIP[from]) {
-          isBOT[from] = true;
-          emit BotAdded(from, true);
+          setBOT(from, true);
         }
         revert("AntiMEV: Sandwich attack detected, added to bots");
       } else {
@@ -978,6 +979,7 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
+  // check if address is a BOT, and if maxWallet exceeded
   function _beforeTokenTransfer(
     address from,
     address to,
@@ -993,6 +995,7 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
+  // if detectMEV is enabled, test for sandwich and frontrunner attacks
   function transfer(address to, uint256 amount) public override returns (bool) {
     if (detectMEV) {
       // test for sandwich
@@ -1003,6 +1006,7 @@ contract AntiMEV is ERC20, Ownable {
     return super.transfer(to, amount);
   }
 
+  // if detectMEV is enabled, test for sandwich and frontrunner attacks
   function transferFrom(
     address from,
     address to,
@@ -1017,47 +1021,46 @@ contract AntiMEV is ERC20, Ownable {
     return super.transferFrom(from, to, amount);
   }
 
-  function setDetectMEV(bool _detectMEV) external onlyOwner {
-    detectMEV = _detectMEV;
-  }
-
+  // update all MEV settings
   function setMEV(
+    bool _detectMEV,
     uint256 _mineBlocks,
     uint256 _gasDelta,
     uint256 _maxSample,
     uint256 _avgGasPrice
   ) external onlyOwner {
+    detectMEV = _detectMEV;
     mineBlocks = _mineBlocks;
     gasDelta = _gasDelta;
     maxSample = _maxSample;
     avgGasPrice = _avgGasPrice;
-    emit MEVUpdated(_mineBlocks, _gasDelta, _maxSample, _avgGasPrice);
-  }
-
-  function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {
-    uniswapV2Pair = _uniswapV2Pair;
+    emit MEVUpdated(
+      _detectMEV,
+      _mineBlocks,
+      _gasDelta,
+      _maxSample,
+      _avgGasPrice
+    );
   }
 
   function setVIP(address _address, bool _isVIP) internal onlyOwner {
+    // require that _address is not a BOT
+    require(!isBOT[_address], "AntiMEV: Cannot set BOT to VIP");
     isVIP[_address] = _isVIP;
     emit VIPAdded(_address, _isVIP);
   }
 
-  function setBots(
-    address[] memory _address,
-    bool[] memory _isBot
-  ) external onlyOwner {
-    for (uint256 i = 0; i < _address.length; i++) {
-      require(
-        _address[i] != owner() &&
-          _address[i] != address(this) &&
-          _address[i] != uniswapV2Pair &&
-          _address[i] != address(uniswapV2Router),
-        "AntiMEV: Invalid address"
-      );
-      isBOT[_address[i]] = _isBot[i];
-      emit BotAdded(_address[i], _isBot[i]);
-    }
+  function setBOT(address _address, bool _isBot) internal onlyOwner {
+    // require that _address is not a VIP
+    require(
+      _address != owner() &&
+        _address != address(this) &&
+        _address != uniswapV2Pair &&
+        !isVIP[_address],
+      "AntiMEV: Cannot set VIP to BOT"
+    );
+    isBOT[_address] = _isBot;
+    emit BotAdded(_address, _isBot);
   }
 
   function setMaxWallet(uint256 _maxWallet) external onlyOwner {
@@ -1072,6 +1075,10 @@ contract AntiMEV is ERC20, Ownable {
     devWallet = payable(_devWallet);
     burnWallet = payable(_burnWallet);
     airdropWallet = payable(_airdropWallet);
+  }
+
+  function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {
+    uniswapV2Pair = _uniswapV2Pair;
   }
 
   function burn(uint256 value) external onlyOwner {
