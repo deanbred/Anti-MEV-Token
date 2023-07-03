@@ -19,7 +19,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         user1 = accounts.user1
         mineBlocks = 3
         gasDelta = 20
-        averageGasPrice = 0
+        averageGasPrice = 1000000
         maxSample = 10
         tokensToSend = ethers.utils.parseEther("10")
 
@@ -29,6 +29,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
       it("Was deployed successfully ", async () => {
         assert(AntiMEV.address)
       })
+      
       describe("constructor", () => {
         it("Has correct supply of tokens ", async () => {
           const totalSupply = await AntiMEV.totalSupply()
@@ -48,6 +49,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log(`* Symbol from contract is: $${symbol}`)
         })
       })
+
       describe("Bot Protection", () => {
         it("Should prevent bots from buying", async () => {
           await AntiMEV.setBots([user1], [true])

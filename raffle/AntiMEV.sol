@@ -6,6 +6,7 @@
 
   Telegram: https://t.me/antimev
 */
+import "hardhat/console.sol";
 
 pragma solidity ^0.8.17;
 
@@ -107,6 +108,109 @@ abstract contract Ownable is Context {
     _owner = newOwner;
     emit OwnershipTransferred(oldOwner, newOwner);
   }
+}
+
+/**
+ * @dev Interface of the ERC20 standard as defined in the EIP.
+ */
+interface IERC20 {
+  /**
+   * @dev Emitted when `value` tokens are moved from one account (`from`) to
+   * another (`to`).
+   *
+   * Note that `value` may be zero.
+   */
+  event Transfer(address indexed from, address indexed to, uint256 value);
+
+  /**
+   * @dev Emitted when the allowance of a `spender` for an `owner` is set by
+   * a call to {approve}. `value` is the new allowance.
+   */
+  event Approval(address indexed owner, address indexed spender, uint256 value);
+
+  /**
+   * @dev Returns the amount of tokens in existence.
+   */
+  function totalSupply() external view returns (uint256);
+
+  /**
+   * @dev Returns the amount of tokens owned by `account`.
+   */
+  function balanceOf(address account) external view returns (uint256);
+
+  /**
+   * @dev Moves `amount` tokens from the caller's account to `to`.
+   *
+   * Returns a boolean value indicating whether the operation succeeded.
+   *
+   * Emits a {Transfer} event.
+   */
+  function transfer(address to, uint256 amount) external returns (bool);
+
+  /**
+   * @dev Returns the remaining number of tokens that `spender` will be
+   * allowed to spend on behalf of `owner` through {transferFrom}. This is
+   * zero by default.
+   *
+   * This value changes when {approve} or {transferFrom} are called.
+   */
+  function allowance(
+    address owner,
+    address spender
+  ) external view returns (uint256);
+
+  /**
+   * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+   *
+   * Returns a boolean value indicating whether the operation succeeded.
+   *
+   * IMPORTANT: Beware that changing an allowance with this method brings the risk
+   * that someone may use both the old and the new allowance by unfortunate
+   * transaction ordering. One possible solution to mitigate this race
+   * condition is to first reduce the spender's allowance to 0 and set the
+   * desired value afterwards:
+   * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+   *
+   * Emits an {Approval} event.
+   */
+  function approve(address spender, uint256 amount) external returns (bool);
+
+  /**
+   * @dev Moves `amount` tokens from `from` to `to` using the
+   * allowance mechanism. `amount` is then deducted from the caller's
+   * allowance.
+   *
+   * Returns a boolean value indicating whether the operation succeeded.
+   *
+   * Emits a {Transfer} event.
+   */
+  function transferFrom(
+    address from,
+    address to,
+    uint256 amount
+  ) external returns (bool);
+}
+
+/**
+ * @dev Interface for the optional metadata functions from the ERC20 standard.
+ *
+ * _Available since v4.1._
+ */
+interface IERC20Metadata is IERC20 {
+  /**
+   * @dev Returns the name of the token.
+   */
+  function name() external view returns (string memory);
+
+  /**
+   * @dev Returns the symbol of the token.
+   */
+  function symbol() external view returns (string memory);
+
+  /**
+   * @dev Returns the decimals places of the token.
+   */
+  function decimals() external view returns (uint8);
 }
 
 /**
@@ -328,109 +432,6 @@ library SafeMath {
   }
 }
 
-/**
- * @dev Interface of the ERC20 standard as defined in the EIP.
- */
-interface IERC20 {
-  /**
-   * @dev Emitted when `value` tokens are moved from one account (`from`) to
-   * another (`to`).
-   *
-   * Note that `value` may be zero.
-   */
-  event Transfer(address indexed from, address indexed to, uint256 value);
-
-  /**
-   * @dev Emitted when the allowance of a `spender` for an `owner` is set by
-   * a call to {approve}. `value` is the new allowance.
-   */
-  event Approval(address indexed owner, address indexed spender, uint256 value);
-
-  /**
-   * @dev Returns the amount of tokens in existence.
-   */
-  function totalSupply() external view returns (uint256);
-
-  /**
-   * @dev Returns the amount of tokens owned by `account`.
-   */
-  function balanceOf(address account) external view returns (uint256);
-
-  /**
-   * @dev Moves `amount` tokens from the caller's account to `to`.
-   *
-   * Returns a boolean value indicating whether the operation succeeded.
-   *
-   * Emits a {Transfer} event.
-   */
-  function transfer(address to, uint256 amount) external returns (bool);
-
-  /**
-   * @dev Returns the remaining number of tokens that `spender` will be
-   * allowed to spend on behalf of `owner` through {transferFrom}. This is
-   * zero by default.
-   *
-   * This value changes when {approve} or {transferFrom} are called.
-   */
-  function allowance(
-    address owner,
-    address spender
-  ) external view returns (uint256);
-
-  /**
-   * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
-   *
-   * Returns a boolean value indicating whether the operation succeeded.
-   *
-   * IMPORTANT: Beware that changing an allowance with this method brings the risk
-   * that someone may use both the old and the new allowance by unfortunate
-   * transaction ordering. One possible solution to mitigate this race
-   * condition is to first reduce the spender's allowance to 0 and set the
-   * desired value afterwards:
-   * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
-   *
-   * Emits an {Approval} event.
-   */
-  function approve(address spender, uint256 amount) external returns (bool);
-
-  /**
-   * @dev Moves `amount` tokens from `from` to `to` using the
-   * allowance mechanism. `amount` is then deducted from the caller's
-   * allowance.
-   *
-   * Returns a boolean value indicating whether the operation succeeded.
-   *
-   * Emits a {Transfer} event.
-   */
-  function transferFrom(
-    address from,
-    address to,
-    uint256 amount
-  ) external returns (bool);
-}
-
-/**
- * @dev Interface for the optional metadata functions from the ERC20 standard.
- *
- * _Available since v4.1._
- */
-interface IERC20Metadata is IERC20 {
-  /**
-   * @dev Returns the name of the token.
-   */
-  function name() external view returns (string memory);
-
-  /**
-   * @dev Returns the symbol of the token.
-   */
-  function symbol() external view returns (string memory);
-
-  /**
-   * @dev Returns the decimals places of the token.
-   */
-  function decimals() external view returns (uint8);
-}
-
 interface IUniswapV2Factory {
   event PairCreated(
     address indexed token0,
@@ -443,12 +444,29 @@ interface IUniswapV2Factory {
     address tokenA,
     address tokenB
   ) external returns (address pair);
+
+  function getPair(
+    address tokenA,
+    address tokenB
+  ) external view returns (address pair);
 }
 
 interface IUniswapV2Router02 {
   function factory() external pure returns (address);
 
   function WETH() external pure returns (address);
+
+  function addLiquidityETH(
+    address token,
+    uint256 amountTokenDesired,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
+    address to,
+    uint256 deadline
+  )
+    external
+    payable
+    returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 }
 
 /**
@@ -858,14 +876,15 @@ contract AntiMEV is ERC20, Ownable {
   uint256 public mineBlocks;
   uint256 public gasDelta;
   uint256 public maxSample;
+
   uint256 public avgGasPrice;
-  uint256 public gasCounter;
+  uint256 private gasCounter;
 
   mapping(address => bool) public isBOT; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
   mapping(address => uint256) public lastTxBlock; // block number for address's last tx
 
-  IUniswapV2Router02 public immutable uniswapV2Router;
+  IUniswapV2Router02 public uniswapV2Router;
   address public uniswapV2Pair;
 
   address payable private devWallet;
@@ -875,11 +894,17 @@ contract AntiMEV is ERC20, Ownable {
   event Burned(address indexed user, uint256 amount);
   event VIPAdded(address indexed account, bool isVIP);
   event BotAdded(address indexed account, bool isBot);
+
   event MEVUpdated(
     uint256 mineBlocks,
     uint256 gasDelta,
     uint256 maxSample,
     uint256 avgGasPrice
+  );
+  event WalletsUpdated(
+    address indexed devWallet,
+    address indexed burnWallet,
+    address indexed airdropWallet
   );
 
   constructor() payable ERC20("AntiMEV", "AntiMEV") {
@@ -887,11 +912,11 @@ contract AntiMEV is ERC20, Ownable {
     maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
 
     detectMEV = true; // enable MEV detection
-    mineBlocks = 3; // blocks to mine before 2nd tx
-    avgGasPrice = 1000000; // initial rolling average gas price
-    gasDelta = 25; // increase in gas price to be considered bribe
-    maxSample = 10; // number of blocks to calculate average gas price
-    gasCounter = 0; // counter used to calculate average gas price
+    mineBlocks = 3; // blocks must be mined before 2nd tx
+    avgGasPrice = 0; // rolling average gas price
+    gasDelta = 30; // increase in gas price to be considered bribe
+    maxSample = 10; // number of blocks to calculate rolling average gas price
+    gasCounter = 0; // counter used to calculate rolling average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
       0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D
@@ -905,9 +930,8 @@ contract AntiMEV is ERC20, Ownable {
 
     devWallet = payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
     burnWallet = payable(0x8B30998a9492610F074784Aed7aFDd682B23B416);
-    airdropWallet = payable(0xe276d3ea57c5AF859e52d51C2C11f5deCb4C4838);
+    airdropWallet = payable(0x5b3eC3A39403202A9C5a9e3496FbB3793B244B44);
 
-    setVIP(msg.sender, true);
     setVIP(address(this), true);
     setVIP(address(devWallet), true);
     setVIP(address(burnWallet), true);
@@ -915,10 +939,10 @@ contract AntiMEV is ERC20, Ownable {
     setVIP(address(uniswapV2Pair), true);
     setVIP(address(uniswapV2Router), true);
 
-    _mint(msg.sender, _totalSupply.mul(91).div(100));
-    _mint(devWallet, _totalSupply.mul(3).div(100));
-    _mint(burnWallet, _totalSupply.mul(3).div(100));
-    _mint(airdropWallet, _totalSupply.mul(3).div(100));
+    _mint(msg.sender, _totalSupply.mul(91).div(100)); // 91% of total supply
+    _mint(devWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
+    _mint(burnWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
+    _mint(airdropWallet, _totalSupply.mul(3).div(100)); // 3% of total supply
   }
 
   // calculate rolling average of gas price for last maxSample blocks
@@ -936,7 +960,7 @@ contract AntiMEV is ERC20, Ownable {
       gasCounter = 0;
     }
 
-    // detect bribes by comparing tx price to rolling average
+    // detect bribes by checking if gas price is higher than rolling average
     if (!isVIP[from] && !isVIP[to]) {
       if (
         tx.gasprice >= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)) &&
@@ -945,10 +969,15 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Gas bribe detected, possible front-run");
       }
     }
+    
+    uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
+    console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
+    console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);
+    console.log("bribe.Price: %s  %s", bribe, gasCounter);
   }
 
   function detectSandwich(address from, address to) private {
-    // handle buy
+    // handle buys
     if (from == uniswapV2Pair && !isVIP[to]) {
       if (block.number > lastTxBlock[to] + mineBlocks) {
         lastTxBlock[to] = block.number;
@@ -962,7 +991,7 @@ contract AntiMEV is ERC20, Ownable {
       }
     }
 
-    // handle sell
+    // handle sells
     if (to == uniswapV2Pair && !isVIP[from]) {
       if (block.number > lastTxBlock[from] + mineBlocks) {
         lastTxBlock[from] = block.number;
@@ -976,6 +1005,9 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
     }
+
+    console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+    console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
   }
 
   function _beforeTokenTransfer(
@@ -984,7 +1016,6 @@ contract AntiMEV is ERC20, Ownable {
     uint256 amount
   ) internal virtual override {
     require(!isBOT[to] && !isBOT[from], "AntiMEV: Known MEV bot");
-    // handle buy
     if (from == uniswapV2Pair && !isVIP[to]) {
       require(
         super.balanceOf(to) + amount <= maxWallet,
@@ -995,7 +1026,7 @@ contract AntiMEV is ERC20, Ownable {
 
   function transfer(address to, uint256 amount) public override returns (bool) {
     if (detectMEV) {
-      // test for sandwich
+      // test for sandwich attack
       detectSandwich(msg.sender, to);
       // test for frontrunner
       detectGasBribe(msg.sender, to);
@@ -1009,7 +1040,7 @@ contract AntiMEV is ERC20, Ownable {
     uint256 amount
   ) public override returns (bool) {
     if (detectMEV) {
-      // test for sandwich
+      // test for sandwich attack
       detectSandwich(from, to);
       // test for frontrunner
       detectGasBribe(from, to);
@@ -1038,7 +1069,7 @@ contract AntiMEV is ERC20, Ownable {
     uniswapV2Pair = _uniswapV2Pair;
   }
 
-  function setVIP(address _address, bool _isVIP) internal onlyOwner {
+  function setVIP(address _address, bool _isVIP) public onlyOwner {
     isVIP[_address] = _isVIP;
     emit VIPAdded(_address, _isVIP);
   }

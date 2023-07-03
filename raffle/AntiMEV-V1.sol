@@ -183,7 +183,7 @@ interface IUniswapV2Factory {
     address indexed token0,
     address indexed token1,
     address pair,
-    uint
+    uint256
   );
 
   function createPair(
