@@ -8,6 +8,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
       let AntiMEV,
         deployer,
         user1,
+        detectMEV,
         mineBlocks,
         gasDelta,
         maxSample,
@@ -17,8 +18,9 @@ const { developmentChains } = require("../../helper-hardhat-config")
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
         user1 = accounts.user1
+        detectMEV = true
         mineBlocks = 3
-        gasDelta = 20
+        gasDelta = 25
         averageGasPrice = 1000000
         maxSample = 10
         tokensToSend = ethers.utils.parseEther("10")
@@ -29,7 +31,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
       it("Was deployed successfully ", async () => {
         assert(AntiMEV.address)
       })
-      
+
       describe("constructor", () => {
         it("Has correct supply of tokens ", async () => {
           const totalSupply = await AntiMEV.totalSupply()
@@ -52,10 +54,17 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
       describe("Bot Protection", () => {
         it("Should prevent bots from buying", async () => {
-          await AntiMEV.setBots([user1], [true])
+          await AntiMEV.setBOT(user1, true)
           await expect(
             AntiMEV.transfer(user1, tokensToSend)
           ).to.be.revertedWith("AntiMEV: Known MEV bot")
+        })
+      })
+
+      describe("VIP Protection", () => {
+        it("Should prevent VIPs from buying", async () => {
+          await AntiMEV.setVIP(user1, true)
+          await expect(AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
         })
       })
 
@@ -94,7 +103,14 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
 
         it("Should revert if gas bribe is detected", async () => {
-          await AntiMEV.setMEV(mineBlocks, gasDelta, maxSample, averageGasPrice)
+          await AntiMEV.setMEV(
+            detectMEV,
+            mineBlocks,
+            gasDelta,
+            maxSample,
+            averageGasPrice
+          )
+          console.log(`* detectMEV: ${detectMEV}`)
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
           console.log(`* maxSample: ${maxSample}`)
