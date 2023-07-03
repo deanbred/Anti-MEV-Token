@@ -499,11 +499,9 @@ interface IUniswapV2Router02 {
  */
 contract ERC20 is Context, IERC20, IERC20Metadata {
   mapping(address => uint256) private _balances;
-
   mapping(address => mapping(address => uint256)) private _allowances;
 
   uint256 private _totalSupply;
-
   string private _name;
   string private _symbol;
 
@@ -896,6 +894,7 @@ contract AntiMEV is ERC20, Ownable {
   event Burned(address indexed user, uint256 amount);
   event VIPAdded(address indexed account, bool isVIP);
   event BotAdded(address indexed account, bool isBot);
+
   event MEVUpdated(
     uint256 mineBlocks,
     uint256 gasDelta,
@@ -970,6 +969,7 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Gas bribe detected, possible front-run");
       }
     }
+    
     uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
     console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
     console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);
@@ -1005,6 +1005,7 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
     }
+
     console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
     console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
   }
@@ -1090,6 +1091,10 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
+  function setMaxWallet(uint256 _maxWallet) external onlyOwner {
+    maxWallet = _maxWallet;
+  }
+
   function setWallets(
     address _devWallet,
     address _burnWallet,
@@ -1098,11 +1103,6 @@ contract AntiMEV is ERC20, Ownable {
     devWallet = payable(_devWallet);
     burnWallet = payable(_burnWallet);
     airdropWallet = payable(_airdropWallet);
-    emit WalletsUpdated(devWallet, burnWallet, airdropWallet);
-  }
-
-  function setMaxWallet(uint256 _maxWallet) external onlyOwner {
-    maxWallet = _maxWallet;
   }
 
   function burn(uint256 value) external onlyOwner {
