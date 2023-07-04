@@ -1,9 +1,9 @@
 {
-  "name": "gmussy-token",
+  "name": "antimev",
   "version": "1.0.0",
   "description": "ERC20 token",
   "main": "index.js",
-  "repository": "https://github.com/deanbred/gmussy-token.git",
+  "repository": "https://github.com/deanbred/Anti-MEV-Token",
   "author": "deanbred",
   "license": "MIT",
   "scripts": {

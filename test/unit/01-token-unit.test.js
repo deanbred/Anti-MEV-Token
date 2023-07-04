@@ -98,13 +98,11 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         it("Should revert if gas bribe is detected", async () => {
           await AntiMEV.setMEV(
-            detectMEV,
             mineBlocks,
             gasDelta,
             maxSample,
             averageGasPrice
           )
-          console.log(`* detectMEV: ${detectMEV}`)
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
           console.log(`* maxSample: ${maxSample}`)

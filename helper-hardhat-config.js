@@ -68,7 +68,6 @@ const networkConfig = {
 
 // Fibonacci Sequence 1.12 Billion tokens
 const INITIAL_SUPPLY = ethers.BigNumber.from("1123581321000000000000000000")
-const MAX_WALLET = ethers.BigNumber.from("33000000000000000000000000") //
 const VERIFICATION_BLOCK_CONFIRMATIONS = 6
 
 const developmentChains = [
@@ -85,5 +84,4 @@ module.exports = {
   VERIFICATION_BLOCK_CONFIRMATIONS,
   developmentChains,
   INITIAL_SUPPLY,
-  MAX_WALLET,
 }

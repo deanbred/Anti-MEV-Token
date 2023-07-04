@@ -868,22 +868,25 @@ contract AntiMEV is ERC20, Ownable {
   IUniswapV2Router02 private immutable uniswapV2Router;
   address public uniswapV2Pair;
 
-  address payable private devWallet;
-  address payable private burnWallet;
-  address payable private airdropWallet;
+  address private dev;
+  address private burns;
+  address private airdrop;
 
   event Burned(address indexed user, uint256 amount);
   event VIPAdded(address indexed account, bool isVIP);
   event BotAdded(address indexed account, bool isBot);
   event MEVUpdated(
-    bool detectMEV,
     uint256 mineBlocks,
     uint256 gasDelta,
     uint256 maxSample,
     uint256 avgGasPrice
   );
 
-  constructor() payable ERC20("AntiMEV", "AntiMEV") {
+  constructor(
+    address _dev,
+    address _burns,
+    address _airdrop
+  ) payable ERC20("AntiMEV", "AntiMEV") {
     uint256 _totalSupply = 1123581321 * 10 ** 18; // 1.12 Billion Fibonacci
     maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
 
@@ -904,22 +907,22 @@ contract AntiMEV is ERC20, Ownable {
       _uniswapV2Router.WETH()
     );
 
-    devWallet = payable(0xc2657176e213DDF18646eFce08F36D656aBE3396);
-    burnWallet = payable(0x8B30998a9492610F074784Aed7aFDd682B23B416);
-    airdropWallet = payable(0xe276d3ea57c5AF859e52d51C2C11f5deCb4C4838);
+    dev = address(_dev);
+    burns = address(_burns);
+    airdrop = address(_airdrop);
 
     setVIP(msg.sender, true);
     setVIP(address(this), true);
-    setVIP(address(devWallet), true);
-    setVIP(address(burnWallet), true);
-    setVIP(address(airdropWallet), true);
-    setVIP(address(uniswapV2Pair), true);
+    setVIP(dev, true);
+    setVIP(burns, true);
+    setVIP(airdrop, true);
+    setVIP(uniswapV2Pair, true);
     setVIP(address(uniswapV2Router), true);
 
     _mint(msg.sender, _totalSupply.mul(91).div(100));
-    _mint(devWallet, _totalSupply.mul(3).div(100));
-    _mint(burnWallet, _totalSupply.mul(3).div(100));
-    _mint(airdropWallet, _totalSupply.mul(3).div(100));
+    _mint(dev, _totalSupply.mul(2).div(100));
+    _mint(burns, _totalSupply.mul(3).div(100));
+    _mint(airdrop, _totalSupply.mul(4).div(100));
   }
 
   // use rolling average of gas price to detect gas bribes
@@ -931,7 +934,6 @@ contract AntiMEV is ERC20, Ownable {
       txCounter +
       tx.gasprice /
       txCounter;
-
     // detect bribes by comparing tx price to rolling average
     if (isVIP[from] && !isVIP[to]) {
       if (
@@ -941,7 +943,6 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Gas bribe detected, possible front-run");
       }
     }
-
     // reset avgGasPrice if sample size too large
     if (txCounter > maxSample) {
       avgGasPrice = tx.gasprice;
@@ -961,7 +962,6 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
     }
-
     // handle sell
     if (isVIP[to] && !isVIP[from]) {
       if (block.number > lastTxBlock[from] + mineBlocks) {
@@ -975,14 +975,14 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
-  // check if address is a BOT, and if maxWallet exceeded
+  // check if address is a BOT
+  // check if maxWallet exceeded
   function _beforeTokenTransfer(
     address from,
     address to,
     uint256 amount
   ) internal virtual override {
     require(!isBOT[to] && !isBOT[from], "AntiMEV: Known MEV bot");
-    // handle buy
     if (isVIP[from] && !isVIP[to]) {
       require(
         super.balanceOf(to) + amount <= maxWallet,
@@ -1017,26 +1017,21 @@ contract AntiMEV is ERC20, Ownable {
     return super.transferFrom(from, to, amount);
   }
 
-  // update all MEV settings
+  function enableMEV(bool _detectMEV) external onlyOwner {
+    detectMEV = _detectMEV;
+  }
+
   function setMEV(
-    bool _detectMEV,
     uint256 _mineBlocks,
     uint256 _gasDelta,
     uint256 _maxSample,
     uint256 _avgGasPrice
   ) external onlyOwner {
-    detectMEV = _detectMEV;
     mineBlocks = _mineBlocks;
     gasDelta = _gasDelta;
     maxSample = _maxSample;
     avgGasPrice = _avgGasPrice;
-    emit MEVUpdated(
-      _detectMEV,
-      _mineBlocks,
-      _gasDelta,
-      _maxSample,
-      _avgGasPrice
-    );
+    emit MEVUpdated(_mineBlocks, _gasDelta, _maxSample, _avgGasPrice);
   }
 
   function setVIP(address _address, bool _isVIP) public onlyOwner {
@@ -1052,6 +1047,7 @@ contract AntiMEV is ERC20, Ownable {
       _address != owner() &&
         _address != address(this) &&
         _address != uniswapV2Pair &&
+        _address != address(uniswapV2Router) &&
         !isVIP[_address],
       "AntiMEV: Cannot set VIP to BOT"
     );
@@ -1064,13 +1060,13 @@ contract AntiMEV is ERC20, Ownable {
   }
 
   function setWallets(
-    address _devWallet,
-    address _burnWallet,
-    address _airdropWallet
+    address _dev,
+    address _burns,
+    address _airdrop
   ) external onlyOwner {
-    devWallet = payable(_devWallet);
-    burnWallet = payable(_burnWallet);
-    airdropWallet = payable(_airdropWallet);
+    dev = _dev;
+    burns = _burns;
+    airdrop = _airdrop;
   }
 
   function setUniswapV2Pair(address _uniswapV2Pair) external onlyOwner {

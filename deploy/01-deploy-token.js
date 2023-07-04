@@ -8,7 +8,11 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
 
   const ourToken = await deploy("AntiMEV", {
     from: deployer,
-    args: [],
+    args: [
+      "0xc2657176e213ddf18646efce08f36d656abe3396",
+      "0x8b30998a9492610f074784aed7afdd682b23b416",
+      "0xe276d3ea57c5af859e52d51c2c11f5decb4c4838",
+    ],
     log: true,
     waitConfirmations: network.config.blockConfirmations || 1,
     gasPrice: 500000000000,
