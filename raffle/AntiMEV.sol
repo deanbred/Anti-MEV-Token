@@ -913,7 +913,7 @@ contract AntiMEV is ERC20, Ownable {
 
     detectMEV = true; // enable MEV detection
     mineBlocks = 3; // blocks must be mined before 2nd tx
-    avgGasPrice = 0; // rolling average gas price
+    avgGasPrice = 1e9; // rolling average gas price
     gasDelta = 30; // increase in gas price to be considered bribe
     maxSample = 10; // number of blocks to calculate rolling average gas price
     gasCounter = 0; // counter used to calculate rolling average gas price
@@ -969,7 +969,7 @@ contract AntiMEV is ERC20, Ownable {
         revert("AntiMEV: Gas bribe detected, possible front-run");
       }
     }
-    
+
     uint256 bribe = avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100));
     console.log("tx.gasprice: %s  %s", tx.gasprice, gasCounter);
     console.log("avgGasPrice: %s  %s", avgGasPrice, gasCounter);

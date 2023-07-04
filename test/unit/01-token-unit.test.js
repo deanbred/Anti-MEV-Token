@@ -20,8 +20,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
         user1 = accounts.user1
         detectMEV = true
         mineBlocks = 3
-        gasDelta = 25
-        averageGasPrice = 1000000
+        gasDelta = 20
+        averageGasPrice = 1e9
         maxSample = 10
         tokensToSend = ethers.utils.parseEther("10")
 
@@ -32,7 +32,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         assert(AntiMEV.address)
       })
 
-      describe("constructor", () => {
+      describe("* constructor *", () => {
         it("Has correct supply of tokens ", async () => {
           const totalSupply = await AntiMEV.totalSupply()
           console.log(
@@ -52,7 +52,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
 
-      describe("Bot Protection", () => {
+      describe("* Bot Protection *", () => {
         it("Should prevent bots from buying", async () => {
           await AntiMEV.setBOT(user1, true)
           await expect(
@@ -61,14 +61,14 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
 
-      describe("VIP Protection", () => {
-        it("Should prevent VIPs from buying", async () => {
+      describe("* VIP Privileges *", () => {
+        it("Should allow VIP to bypass MEV detectiom", async () => {
           await AntiMEV.setVIP(user1, true)
           await expect(AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
         })
       })
 
-      describe("Gas Bribe Detection", () => {
+      describe("* Gas Bribe Detection *", () => {
         beforeEach(async () => {
           await AntiMEV.approve(deployer, tokensToSend)
           await AntiMEV.approve(user1, tokensToSend)
@@ -89,16 +89,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
             const { gasUsed, effectiveGasPrice } = transactionReceipt
             const transferGasCost = gasUsed.mul(effectiveGasPrice)
 
-            console.log(`gasUsed ${i}: ${ethers.utils.commify(gasUsed)}`)
-            console.log(
-              `effectiveGasPrice ${i}: ${ethers.utils.commify(
-                effectiveGasPrice
-              )}`
-            )
-            console.log(
-              `transferGasCost ${i}: ${ethers.utils.commify(transferGasCost)}`
-            )
-            console.log("---------------------------")
+            console.log(`gasUsed ${i}: ${gasUsed}`)
+            console.log(`effectiveGasPrice ${i}: ${effectiveGasPrice}`)
+            console.log(`transferGasCost ${i}: ${transferGasCost}`)
+            console.log("------")
           }
         })
 
@@ -129,17 +123,13 @@ const { developmentChains } = require("../../helper-hardhat-config")
           const { gasUsed, effectiveGasPrice } = transactionReceipt
           const transferGasCost = gasUsed.mul(effectiveGasPrice)
           const bribe = effectiveGasPrice.add(
-            effectiveGasPrice.mul(gasDelta + 40).div(100)
+            effectiveGasPrice.mul(gasDelta + 50).div(100)
           )
 
-          console.log(`gasUsed: ${ethers.utils.commify(gasUsed)}`)
-          console.log(
-            `effectiveGasPrice: ${ethers.utils.commify(effectiveGasPrice)}`
-          )
-          console.log(
-            `transferGasCost: ${ethers.utils.commify(transferGasCost)}`
-          )
-          console.log(`bribe-test: ${ethers.utils.commify(bribe)}`)
+          console.log(`gasUsed: ${gasUsed}`)
+          console.log(`effectiveGasPrice(tx.gasprice): ${effectiveGasPrice}`)
+          console.log(`transferGasCost: ${transferGasCost}`)
+          console.log(`bribe-test: ${bribe}`)
           console.log("---------------------------")
 
           await expect(
@@ -152,7 +142,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
 
-      describe("Transfers", () => {
+      describe("* Transfers *", () => {
         const halfToSend = ethers.utils.parseEther("0.5")
 
         it("Should transfer tokens successfully to an address", async () => {
@@ -225,7 +215,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
           )
         })
       })
-      describe("Allowances", () => {
+      describe("* Allowances *", () => {
         const tokensToSpend = ethers.utils.parseEther("1")
         const overDraft = ethers.utils.parseEther("1.1")
 
