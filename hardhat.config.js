@@ -1,3 +1,5 @@
+const { boolean } = require("hardhat/internal/core/params/argumentTypes")
+
 require("@nomicfoundation/hardhat-toolbox")
 require("@nomiclabs/hardhat-etherscan")
 require("@nomiclabs/hardhat-ethers")
@@ -8,6 +10,8 @@ require("dotenv").config()
 
 /** @type import('hardhat/config').HardhatUserConfig */
 const PRIVATE_KEY = process.env.PRIVATE_KEY
+const REPORT_GAS = process.env.REPORT_GAS
+const CONTRACT_SIZER = process.env.CONTRACT_SIZER
 
 module.exports = {
   defaultNetwork: "hardhat",
@@ -61,14 +65,14 @@ module.exports = {
     },
   },
   gasReporter: {
-    enabled: true,
+    enabled: false,
     currency: "USD",
     outputFile: "gas-report.txt",
     noColors: true,
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
   },
   contractSizer: {
-    runOnCompile: true,
+    runOnCompile: false,
     strict: true,
     only: [],
     outputFile: "contract-sizer.txt",

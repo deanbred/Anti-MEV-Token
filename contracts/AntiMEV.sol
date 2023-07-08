@@ -849,6 +849,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     uint256 amount
   ) internal virtual {}
 }
+import "hardhat/console.sol";
 
 contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
@@ -952,26 +953,52 @@ contract AntiMEV is ERC20, Ownable {
 
   // use block number of last tx to detect sandwich attacks
   function detectSandwich(address from, address to) private {
+    uint256 buyCounter = 0;
     // handle buy
     if (isVIP[from] && !isVIP[to]) {
+      if (block.number == lastTxBlock[to]) {
+        console.log("buy: equal to lastTxBlock");
+        setBOT(to, true);
+        revert("AntiMEV: Sandwich attack detected, added to bots");
+      }
       if (block.number > lastTxBlock[to] + mineBlocks) {
         lastTxBlock[to] = block.number;
-      } else if (block.number == lastTxBlock[to]) {
-        setBOT(to, true);
+        console.log("passed buy check");
+        console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+        console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
+
+        buyCounter += 1;
+        console.log("buyCounter: %s", buyCounter);
+
+        uint256 difference = block.number - lastTxBlock[to];
+        console.log("block: %s buy difference: %s", block.number, difference);
+        //setBOT(to, true);
       } else {
-        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
+        console.log("got to buy else");
+        //setBOT(to, true);
+        revert("AntiMEV: Transaction too soon, possible sandwich attack");
       }
     }
+
     // handle sell
     if (isVIP[to] && !isVIP[from]) {
       if (block.number > lastTxBlock[from] + mineBlocks) {
         lastTxBlock[from] = block.number;
+        console.log("passed sell check");
+        console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
+        console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
       } else if (block.number == lastTxBlock[from]) {
+        console.log("got to sell else if");
         setBOT(from, true);
         revert("AntiMEV: Sandwich attack detected, added to bots");
       } else {
+        console.log("got to sell else");
+
+        setBOT(from, true);
         revert("AntiMEV: Transfers too frequent, possible sandwich attack");
       }
+      uint256 difference = block.number - lastTxBlock[from];
+      console.log("from sell difference: %s", difference);
     }
   }
 

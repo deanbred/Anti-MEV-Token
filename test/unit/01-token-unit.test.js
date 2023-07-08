@@ -27,12 +27,15 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         await deployments.fixture("all")
         AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
+        //set deployer as VIP
+        await AntiMEV.setVIP(deployer, true)
       })
+
       it("Was deployed successfully ", async () => {
         assert(AntiMEV.address)
       })
 
-      describe("* constructor *", () => {
+      describe("* Constructor *", () => {
         it("Has correct supply of tokens ", async () => {
           const totalSupply = await AntiMEV.totalSupply()
           console.log(
@@ -41,6 +44,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
             )}`
           )
         })
+
         it("Initializes the token with the correct name and symbol ", async () => {
           const name = (await AntiMEV.name()).toString()
           assert.equal(name, "AntiMEV")
@@ -52,7 +56,21 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
 
-      describe("* Bot Protection *", () => {
+      describe("* BOT Protection *", () => {
+        it("Should add to bots if two tranfers in the same block", async () => {
+          await AntiMEV.transfer(user1, tokensToSend)
+
+          await expect(
+            AntiMEV.transfer(user1, tokensToSend)
+          ).to.be.revertedWith(
+            "AntiMEV: Transaction too soon, possible sandwich attack"
+          )
+          // await AntiMEV.setBOT(user1, true)
+
+          const bott = await AntiMEV.isBOT(user1)
+          console.log(`* BOT: ${bott}`)
+        })
+
         it("Should prevent bots from buying", async () => {
           await AntiMEV.setBOT(user1, true)
           await expect(
@@ -62,9 +80,45 @@ const { developmentChains } = require("../../helper-hardhat-config")
       })
 
       describe("* VIP Privileges *", () => {
-        it("Should allow VIP to bypass MEV detectiom", async () => {
+        it("Should allow VIP to do 2 transfers in the same block", async () => {
           await AntiMEV.setVIP(user1, true)
-          await expect(AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
+          await AntiMEV.transfer(user1, tokensToSend)
+          expect(await AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
+        })
+
+        it("Should allow VIP to transfer with a gas bribe", async () => {
+          await AntiMEV.setVIP(user1, true)
+          await AntiMEV.approve(user1, tokensToSend)
+
+          await AntiMEV.setMEV(mineBlocks, gasDelta, maxSample, averageGasPrice)
+          console.log(`* mineBlocks: ${mineBlocks}`)
+          console.log(`* gasDelta: ${gasDelta}`)
+          console.log(`* maxSample: ${maxSample}`)
+          console.log(`* averageGasPrice: ${averageGasPrice}`)
+          console.log("---------------------------")
+
+          const transactionResponse = await AntiMEV.transfer(
+            user1,
+            tokensToSend
+          )
+          const transactionReceipt = await transactionResponse.wait()
+          const { gasUsed, effectiveGasPrice } = transactionReceipt
+          const transferGasCost = gasUsed.mul(effectiveGasPrice)
+          const bribe = effectiveGasPrice.add(
+            effectiveGasPrice.mul(gasDelta + 50).div(100)
+          )
+
+          console.log(`gasUsed: ${gasUsed}`)
+          console.log(`effectiveGasPrice(tx.gasprice): ${effectiveGasPrice}`)
+          console.log(`transferGasCost: ${transferGasCost}`)
+          console.log(`bribe-test: ${bribe}`)
+          console.log("---------------------------")
+
+          expect(
+            await AntiMEV.transfer(user1, tokensToSend, {
+              gasPrice: bribe,
+            })
+          ).to.not.be.reverted
         })
       })
 
@@ -97,12 +151,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
 
         it("Should revert if gas bribe is detected", async () => {
-          await AntiMEV.setMEV(
-            mineBlocks,
-            gasDelta,
-            maxSample,
-            averageGasPrice
-          )
+          await AntiMEV.setMEV(mineBlocks, gasDelta, maxSample, averageGasPrice)
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
           console.log(`* maxSample: ${maxSample}`)
@@ -112,10 +161,6 @@ const { developmentChains } = require("../../helper-hardhat-config")
             user1,
             tokensToSend
           )
-
-          for (let j = 0; j < mineBlocks; j++) {
-            await ethers.provider.send("evm_mine")
-          }
 
           const transactionReceipt = await transactionResponse.wait()
           const { gasUsed, effectiveGasPrice } = transactionReceipt
@@ -129,6 +174,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log(`transferGasCost: ${transferGasCost}`)
           console.log(`bribe-test: ${bribe}`)
           console.log("---------------------------")
+
+          for (let j = 0; j < mineBlocks; j++) {
+            await ethers.provider.send("evm_mine")
+          }
 
           await expect(
             AntiMEV.transfer(user1, tokensToSend, {
@@ -145,18 +194,18 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         it("Should transfer tokens successfully to an address", async () => {
           const startBalance = await AntiMEV.balanceOf(user1)
-          console.log(`* startBalance: ${startBalance}`)
+          console.log(`startBalance: ${startBalance}`)
 
           await AntiMEV.transfer(user1, tokensToSend)
 
           expect(await AntiMEV.balanceOf(user1)).to.equal(tokensToSend)
           const endBalance = await AntiMEV.balanceOf(user1)
-          console.log(`* endBalance: ${endBalance}`)
+          console.log(`endBalance: ${endBalance}`)
         })
 
         it("Should prevent transfers over maxWallet", async () => {
           const maxWallet = await AntiMEV.maxWallet()
-          console.log(`* maxWallet: ${maxWallet}`)
+          console.log(`maxWallet: ${maxWallet}`)
 
           await expect(
             AntiMEV.transfer(user1, maxWallet.add(1))
@@ -206,13 +255,14 @@ const { developmentChains } = require("../../helper-hardhat-config")
             .be.reverted
         })
 
-        it("Emits an transfer event when an transfer occurs", async () => {
+        it("Should emit transfer event when an transfer occurs", async () => {
           await expect(AntiMEV.transfer(user1, tokensToSend)).to.emit(
             AntiMEV,
             "Transfer"
           )
         })
       })
+
       describe("* Allowances *", () => {
         const tokensToSpend = ethers.utils.parseEther("1")
         const overDraft = ethers.utils.parseEther("1.1")
@@ -220,10 +270,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
         beforeEach(async () => {
           playerToken = await ethers.getContract("AntiMEV", user1)
         })
-        it("Allowance is accurately being set", async () => {
+        it("Should set allowance accurately", async () => {
           await AntiMEV.approve(user1, tokensToSpend)
           const allowance = await AntiMEV.allowance(deployer, user1)
-          console.log(`* Allowance from contract: ${allowance}`)
+          console.log(`Allowance from contract: ${allowance / 1e18}`)
           assert.equal(allowance.toString(), tokensToSpend)
         })
 
@@ -234,23 +284,23 @@ const { developmentChains } = require("../../helper-hardhat-config")
           await playerToken.transferFrom(deployer, user1, tokensToSpend)
 
           expect(await playerToken.balanceOf(user1)).to.equal(tokensToSpend)
-          console.log(`* Tokens approved from contract: ${tokensToSpend}`)
+          console.log(`Tokens approved from contract: ${tokensToSpend}`)
         })
 
-        it("Does not allow an unnaproved member to do transfers", async () => {
+        it("Should not allow unnaproved user to do transfers", async () => {
           await expect(
             playerToken.transferFrom(deployer, user1, tokensToSpend)
           ).to.be.revertedWith("ERC20: insufficient allowance")
         })
 
-        it("Does not allow a user to go over the allowance", async () => {
+        it("Should not allow user to go over the allowance", async () => {
           await AntiMEV.approve(user1, tokensToSpend)
           await expect(
             playerToken.transferFrom(deployer, user1, overDraft)
           ).to.be.revertedWith("ERC20: insufficient allowance")
         })
 
-        it("Emits an approval event when an approval occurs", async () => {
+        it("Should emit approval event when an approval occurs", async () => {
           await expect(AntiMEV.approve(user1, tokensToSpend)).to.emit(
             AntiMEV,
             "Approval"
