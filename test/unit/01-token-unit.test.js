@@ -1,11 +1,12 @@
 const { assert, expect } = require("chai")
 const { network, getNamedAccounts, deployments, ethers } = require("hardhat")
 const { developmentChains } = require("../../helper-hardhat-config")
-
 !developmentChains.includes(network.name)
   ? describe.skip
   : describe("Token Unit Test", function () {
       let AntiMEV,
+        UniswapFactory,
+        UniswapRouter,
         deployer,
         user1,
         detectMEV,
@@ -26,13 +27,18 @@ const { developmentChains } = require("../../helper-hardhat-config")
         tokensToSend = ethers.utils.parseEther("100")
 
         await deployments.fixture("all")
+        // Deploy Uniswap Factory
+        UniswapFactory = await hre.ethers.getContractFactory()
+        // Deploy Uniswap Router
+        UniswapRouter = await hre.ethers.getContractFactory()
+        // Deploy AntiMEV
         AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
-        //set deployer as VIP
-        await AntiMEV.setVIP(deployer, true)
       })
 
       it("Was deployed successfully ", async () => {
         assert(AntiMEV.address)
+        assert(uniswapFactory.address)
+        assert(uniswapRouter.address)
       })
 
       describe("* Constructor *", () => {
@@ -44,7 +50,6 @@ const { developmentChains } = require("../../helper-hardhat-config")
             )}`
           )
         })
-
         it("Initializes the token with the correct name and symbol ", async () => {
           const name = (await AntiMEV.name()).toString()
           assert.equal(name, "AntiMEV")
@@ -53,6 +58,13 @@ const { developmentChains } = require("../../helper-hardhat-config")
           const symbol = (await AntiMEV.symbol()).toString()
           assert.equal(symbol, "AntiMEV")
           console.log(`* Symbol from contract is: $${symbol}`)
+        })
+        it("Creates a Uniswap pair for the token ", async () => {
+          const pairAddress = await uniswapFactory.getPair(
+            AntiMEV.address,
+            ethers.constants.AddressZero
+          )
+          console.log(`* Pair address from contract: ${pairAddress}`)
         })
       })
 
