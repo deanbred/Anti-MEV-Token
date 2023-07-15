@@ -5,8 +5,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
   ? describe.skip
   : describe("Token Unit Test", function () {
       let AntiMEV,
-        UniswapFactory,
-        UniswapRouter,
+        uniswapRouter,
+        uniswapV2Pair,
         deployer,
         user1,
         detectMEV,
@@ -27,18 +27,18 @@ const { developmentChains } = require("../../helper-hardhat-config")
         tokensToSend = ethers.utils.parseEther("100")
 
         await deployments.fixture("all")
-        // Deploy Uniswap Factory
-        UniswapFactory = await hre.ethers.getContractFactory()
+
         // Deploy Uniswap Router
-        UniswapRouter = await hre.ethers.getContractFactory()
+        uniswapV2Router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" // Uniswap Router Address
+
         // Deploy AntiMEV
         AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
+
+        uniswapV2Pair = await AntiMEV.uniswapV2Pair()
       })
 
       it("Was deployed successfully ", async () => {
         assert(AntiMEV.address)
-        assert(uniswapFactory.address)
-        assert(uniswapRouter.address)
       })
 
       describe("* Constructor *", () => {
@@ -60,11 +60,12 @@ const { developmentChains } = require("../../helper-hardhat-config")
           console.log(`* Symbol from contract is: $${symbol}`)
         })
         it("Creates a Uniswap pair for the token ", async () => {
-          const pairAddress = await uniswapFactory.getPair(
-            AntiMEV.address,
-            ethers.constants.AddressZero
-          )
-          console.log(`* Pair address from contract: ${pairAddress}`)
+          console.log(`* Pair address from contract: ${uniswapV2Pair}`)
+        })
+        it("Adds 3 eth liquidity to the Uniswap pair ", async () => {
+          const tokenAmount = await AntiMEV.balanceOf(deployer)
+          const ethAmount = ethers.utils.parseEther("3")
+          await AntiMEV.addLiquidity(tokenAmount, ethAmount)
         })
       })
 

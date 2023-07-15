@@ -6,6 +6,7 @@
 
   Telegram: https://t.me/antimev
 */
+import "hardhat/console.sol";
 
 pragma solidity ^0.8.17;
 
@@ -402,7 +403,6 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     uint256 amount
   ) internal virtual {}
 }
-import "hardhat/console.sol";
 
 contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
@@ -547,6 +547,24 @@ contract AntiMEV is ERC20, Ownable {
       uint256 difference = block.number - lastTxBlock[from];
       console.log("from sell difference: %s", difference);
     }
+  }
+
+  function addLiquidity(
+    uint256 tokenAmount,
+    uint256 ethAmount
+  ) external onlyOwner {
+    // Approve the Uniswap router to spend the token amount
+    _approve(address(this), address(uniswapV2Router), tokenAmount);
+
+    // Add the liquidity
+    uniswapV2Router.addLiquidityETH{value: ethAmount}(
+      address(this),
+      tokenAmount,
+      0, // slippage is unavoidable
+      0, // slippage is unavoidable
+      owner(), // Liquidity tokens are sent to the owner
+      block.timestamp // deadline
+    );
   }
 
   // check if address is a BOT
