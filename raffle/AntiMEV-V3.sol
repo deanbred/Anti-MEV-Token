@@ -449,6 +449,26 @@ interface IUniswapV2Router02 {
   function factory() external pure returns (address);
 
   function WETH() external pure returns (address);
+
+  function swapExactTokensForETH(
+    uint amountIn,
+    uint amountOutMin,
+    address[] calldata path,
+    address to,
+    uint deadline
+  ) external returns (uint[] memory amounts);
+
+  function addLiquidityETH(
+    address token,
+    uint256 amountTokenDesired,
+    uint256 amountTokenMin,
+    uint256 amountETHMin,
+    address to,
+    uint256 deadline
+  )
+    external
+    payable
+    returns (uint256 amountToken, uint256 amountETH, uint256 liquidity);
 }
 
 /**
@@ -855,6 +875,7 @@ contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
   bool public detectMEV;
+  bool public flagBOT;
   uint256 public maxWallet;
   uint256 public mineBlocks;
   uint256 public gasDelta;
@@ -892,6 +913,7 @@ contract AntiMEV is ERC20, Ownable {
     maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
 
     detectMEV = true; // enable MEV detection
+    flagBOT = true; // enable BOT detection
     mineBlocks = 3; // blocks to mine before 2nd tx
     avgGasPrice = 1e9; // initial rolling average gas price
     gasDelta = 25; // increase in gas price to be considered bribe
@@ -951,7 +973,7 @@ contract AntiMEV is ERC20, Ownable {
     }
   }
 
-    // use block number of last tx to detect sandwich attacks
+  // use block number of last tx to detect sandwich attacks
   function detectSandwich(address from, address to) private {
     // handle buy
     // if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
@@ -981,60 +1003,6 @@ contract AntiMEV is ERC20, Ownable {
     console.log("block.number: %s", block.number);
   }
 
-/*   // use block number of last tx to detect sandwich attacks
-  function detectSandwich(address from, address to) private {
-    uint256 buyCounter = 0;
-    // handle buy
-    // if (from == uniswapV2Pair && to != address(uniswapV2Router)) {
-
-    if (isVIP[from] && !isVIP[to]) {
-      if (block.number == lastTxBlock[to]) {
-        console.log("buy: equal to lastTxBlock");
-        _setBOT(to, true);
-        revert("AntiMEV: Sandwich attack detected, added to bots");
-      }
-      if (block.number > lastTxBlock[to] + mineBlocks) {
-        lastTxBlock[tx.origin] = block.number;
-
-        // lastTxBlock[to] = block.number;
-        console.log("passed buy check");
-        console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
-        console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
-        console.log("tx.origin: %s lastTxBlock: %s", tx.origin, lastTxBlock[tx.origin]);
-
-        buyCounter += 1;
-        console.log("buyCounter: %s", buyCounter);
-
-        uint256 difference = block.number - lastTxBlock[to];
-        console.log("block: %s buy difference: %s", block.number, difference);
-      } else {
-        console.log("got to buy else");
-        revert("AntiMEV: Transaction too soon, possible sandwich attack");
-      }
-    }
-
-    // handle sell
-    if (isVIP[to] && !isVIP[from]) {
-      if (block.number > lastTxBlock[from] + mineBlocks) {
-        lastTxBlock[from] = block.number;
-        console.log("passed sell check");
-        console.log("to: %s lastTxBlock: %s", to, lastTxBlock[to]);
-        console.log("from: %s lastTxBlock: %s", from, lastTxBlock[from]);
-      } else if (block.number == lastTxBlock[from]) {
-        console.log("got to sell else if");
-        setBOT(from, true);
-        revert("AntiMEV: Sandwich attack detected, added to bots");
-      } else {
-        console.log("got to sell else");
-
-        setBOT(from, true);
-        revert("AntiMEV: Transfers too frequent, possible sandwich attack");
-      }
-      uint256 difference = block.number - lastTxBlock[from];
-      console.log("from sell difference: %s", difference);
-    }
-  } */
-
   // check if address is a BOT
   // check if maxWallet exceeded
   function _beforeTokenTransfer(
@@ -1052,14 +1020,18 @@ contract AntiMEV is ERC20, Ownable {
   }
 
   // if detectMEV is enabled, test for sandwich and frontrunner attacks
-  function transfer(address to, uint256 amount) public override returns (bool) {
+  function _transfer(
+    address from,
+    address to,
+    uint256 amount
+  ) internal virtual override {
     if (detectMEV) {
       // test for sandwich
       detectSandwich(msg.sender, to);
       // test for frontrunner
       detectGasBribe(msg.sender, to);
     }
-    return super.transfer(to, amount);
+    super._transfer(from, to, amount);
   }
 
   // if detectMEV is enabled, test for sandwich and frontrunner attacks
@@ -1077,8 +1049,9 @@ contract AntiMEV is ERC20, Ownable {
     return super.transferFrom(from, to, amount);
   }
 
-  function enableMEV(bool _detectMEV) external onlyOwner {
+  function enableMEV(bool _detectMEV, bool _flagBOT) external onlyOwner {
     detectMEV = _detectMEV;
+    flagBOT = _flagBOT;
   }
 
   function setMEV(
@@ -1101,8 +1074,7 @@ contract AntiMEV is ERC20, Ownable {
     emit VIPAdded(_address, _isVIP);
   }
 
-  function setBOT(address _address, bool _isBot) public onlyOwner {
-    // require that _address is not a VIP
+  function _setBOT(address _address, bool _isBot) internal {
     require(
       _address != owner() &&
         _address != address(this) &&
@@ -1112,10 +1084,11 @@ contract AntiMEV is ERC20, Ownable {
       "AntiMEV: Cannot set VIP to BOT"
     );
     isBOT[_address] = _isBot;
-    emit BotAdded(_address, _isBot);
+    emit BotAdded(_address, _isBot);  
   }
 
-  function _setBOT(address _address, bool _isBot) internal {
+  function setBOT(address _address, bool _isBot) public onlyOwner {
+    // require that _address is not a VIP
     require(
       _address != owner() &&
         _address != address(this) &&

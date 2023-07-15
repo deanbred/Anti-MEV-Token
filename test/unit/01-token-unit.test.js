@@ -23,7 +23,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         gasDelta = 20
         averageGasPrice = 1e9
         maxSample = 10
-        tokensToSend = ethers.utils.parseEther("10")
+        tokensToSend = ethers.utils.parseEther("100")
 
         await deployments.fixture("all")
         AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
@@ -58,13 +58,22 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
       describe("* BOT Protection *", () => {
         it("Should add to bots if two tranfers in the same block", async () => {
+          await AntiMEV.approve(user1, tokensToSend)
+          const user1Allowance = await AntiMEV.allowance(deployer, user1)
+          console.log(`user1 Allowance from contract: ${user1Allowance / 1e18}`)
+
+          await AntiMEV.approve(deployer, tokensToSend)
+          const deployerAllowance = await AntiMEV.allowance(user1, deployer)
+          console.log(
+            `deployer Allowance from contract: ${deployerAllowance / 1e18}`
+          )
+
           await AntiMEV.transfer(user1, tokensToSend)
+          await AntiMEV.approve(user1, tokensToSend)
 
           await expect(
             AntiMEV.transfer(user1, tokensToSend)
-          ).to.be.revertedWith(
-            "AntiMEV: Transaction too soon, possible sandwich attack"
-          )
+          ).to.be.revertedWith("AntiMEV: Sandwich attack detected")
           // await AntiMEV.setBOT(user1, true)
 
           const bott = await AntiMEV.isBOT(user1)
