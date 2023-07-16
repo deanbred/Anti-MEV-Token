@@ -14,7 +14,8 @@ const { developmentChains } = require("../../helper-hardhat-config")
         gasDelta,
         maxSample,
         averageGasPrice,
-        tokensToSend
+        tokensToSend,
+        halfToSend
       beforeEach(async function () {
         const accounts = await getNamedAccounts()
         deployer = accounts.deployer
@@ -28,13 +29,16 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
         await deployments.fixture("all")
 
-        // Deploy Uniswap Router
-        uniswapV2Router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D" // Uniswap Router Address
-
         // Deploy AntiMEV
         AntiMEV = await hre.ethers.getContract("AntiMEV", deployer)
 
         uniswapV2Pair = await AntiMEV.uniswapV2Pair()
+        uniswapV2Router = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"
+
+        // add deployer as VIP
+        //await AntiMEV.setVIP(deployer, true)
+        // add user1 as VIP
+        //await AntiMEV.setVIP(user1, true)
       })
 
       it("Was deployed successfully ", async () => {
@@ -62,56 +66,51 @@ const { developmentChains } = require("../../helper-hardhat-config")
         it("Creates a Uniswap pair for the token ", async () => {
           console.log(`* Pair address from contract: ${uniswapV2Pair}`)
         })
-        it("Adds 3 eth liquidity to the Uniswap pair ", async () => {
+        it("Adds 3 ETH liquidity to the Uniswap pair ", async () => {
           const tokenAmount = await AntiMEV.balanceOf(deployer)
           const ethAmount = ethers.utils.parseEther("3")
+          console.log(`* Token amount: ${tokenAmount / 1e18}`)
+          console.log(`* Eth amount: ${ethAmount / 1e18}`)
           await AntiMEV.addLiquidity(tokenAmount, ethAmount)
         })
       })
 
-      describe("* BOT Protection *", () => {
+      describe("* BOT *", () => {
         it("Should add to bots if two tranfers in the same block", async () => {
-          await AntiMEV.approve(user1, tokensToSend)
-          const user1Allowance = await AntiMEV.allowance(deployer, user1)
-          console.log(`user1 Allowance from contract: ${user1Allowance / 1e18}`)
-
-          await AntiMEV.approve(deployer, tokensToSend)
-          const deployerAllowance = await AntiMEV.allowance(user1, deployer)
-          console.log(
-            `deployer Allowance from contract: ${deployerAllowance / 1e18}`
-          )
-
+          await AntiMEV.setVIP(deployer, false)
           await AntiMEV.transfer(user1, tokensToSend)
-          await AntiMEV.approve(user1, tokensToSend)
-
           await expect(
             AntiMEV.transfer(user1, tokensToSend)
-          ).to.be.revertedWith("AntiMEV: Sandwich attack detected")
-          // await AntiMEV.setBOT(user1, true)
-
-          const bott = await AntiMEV.isBOT(user1)
-          console.log(`* BOT: ${bott}`)
+          ).to.be.revertedWith("AntiMEV: Detected sandwich attack, BOT added")
         })
 
         it("Should prevent bots from buying", async () => {
           await AntiMEV.setBOT(user1, true)
           await expect(
             AntiMEV.transfer(user1, tokensToSend)
-          ).to.be.revertedWith("AntiMEV: Known MEV bot")
+          ).to.be.revertedWith("AntiMEV: Known MEV Bot")
+          await AntiMEV.setBOT(user1, false)
+          await expect(AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
         })
       })
 
-      describe("* VIP Privileges *", () => {
+      describe("* VIP *", () => {
         it("Should allow VIP to do 2 transfers in the same block", async () => {
-          await AntiMEV.setVIP(user1, true)
+          //await AntiMEV.setVIP(deployer, true)
           await AntiMEV.transfer(user1, tokensToSend)
           expect(await AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
         })
 
-        it("Should allow VIP to transfer with a gas bribe", async () => {
-          await AntiMEV.setVIP(user1, true)
-          await AntiMEV.approve(user1, tokensToSend)
+        it("Should not allow regular user to do 2 transfers", async () => {
+          await AntiMEV.setVIP(deployer, false)
+          await AntiMEV.transfer(user1, tokensToSend)
+          expect(
+            await AntiMEV.transfer(user1, tokensToSend)
+          ).to.be.revertedWith("AntiMEV: Detected sandwich attack, BOT added")
+        })
 
+        it("Should allow VIP to transfer with a gas bribe", async () => {
+          //await AntiMEV.setVIP(deployer, true)
           await AntiMEV.setMEV(mineBlocks, gasDelta, maxSample, averageGasPrice)
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
@@ -130,10 +129,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
             effectiveGasPrice.mul(gasDelta + 50).div(100)
           )
 
-          console.log(`gasUsed: ${gasUsed}`)
-          console.log(`effectiveGasPrice(tx.gasprice): ${effectiveGasPrice}`)
-          console.log(`transferGasCost: ${transferGasCost}`)
-          console.log(`bribe-test: ${bribe}`)
+          console.log(`* gasUsed: ${gasUsed}`)
+          console.log(`* effectiveGasPrice(tx.gasprice): ${effectiveGasPrice}`)
+          console.log(`* transferGasCost: ${transferGasCost}`)
+          console.log(`* bribe-test: ${bribe}`)
           console.log("---------------------------")
 
           expect(
@@ -144,12 +143,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
       })
 
-      describe("* Gas Bribe Detection *", () => {
-        beforeEach(async () => {
-          await AntiMEV.approve(deployer, tokensToSend)
-          await AntiMEV.approve(user1, tokensToSend)
-        })
-
+      describe("* GAS *", () => {
         it("Should calculate the average gas price of 10 transfers", async () => {
           for (let i = 1; i < 11; i++) {
             for (let j = 0; j < mineBlocks; j++) {
@@ -165,10 +159,10 @@ const { developmentChains } = require("../../helper-hardhat-config")
             const { gasUsed, effectiveGasPrice } = transactionReceipt
             const transferGasCost = gasUsed.mul(effectiveGasPrice)
 
-            console.log(`gasUsed ${i}: ${gasUsed}`)
-            console.log(`effectiveGasPrice ${i}: ${effectiveGasPrice}`)
-            console.log(`transferGasCost ${i}: ${transferGasCost}`)
-            console.log("------")
+            console.log(`* gasUsed ${i}: ${gasUsed}`)
+            console.log(`* effectiveGasPrice ${i}: ${effectiveGasPrice}`)
+            console.log(`* transferGasCost ${i}: ${transferGasCost}`)
+            console.log("-------------")
           }
         })
 
@@ -205,9 +199,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
             AntiMEV.transfer(user1, tokensToSend, {
               gasPrice: bribe,
             })
-          ).to.be.revertedWith(
-            "AntiMEV: Gas bribe detected, possible front-run"
-          )
+          ).to.be.revertedWith("AntiMEV: Detected gas bribe")
         })
       })
 
@@ -222,16 +214,16 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
           expect(await AntiMEV.balanceOf(user1)).to.equal(tokensToSend)
           const endBalance = await AntiMEV.balanceOf(user1)
-          console.log(`endBalance: ${endBalance}`)
+          console.log(`endBalance: ${endBalance / 1e18}`)
         })
 
         it("Should prevent transfers over maxWallet", async () => {
           const maxWallet = await AntiMEV.maxWallet()
-          console.log(`maxWallet: ${maxWallet}`)
+          console.log(`maxWallet: ${maxWallet / 1e18}`)
 
           await expect(
             AntiMEV.transfer(user1, maxWallet.add(1))
-          ).to.be.revertedWith("Max wallet exceeded!")
+          ).to.be.revertedWith("AntiMEV: Max wallet exceeded")
         })
 
         it("Should prevent 2 transfers in the same block", async () => {
@@ -239,9 +231,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
           await expect(
             AntiMEV.transfer(user1, tokensToSend)
-          ).to.be.revertedWith(
-            "AntiMEV: Transfers too frequent, possible sandwich attack"
-          )
+          ).to.be.revertedWith("AntiMEV: Detected sandwich attack, BOT added")
         })
 
         it("Should allow 2 transfers after block delay", async () => {
@@ -257,11 +247,12 @@ const { developmentChains } = require("../../helper-hardhat-config")
         it("Should prevent 2 transferFroms in the same block", async () => {
           await AntiMEV.approve(deployer, tokensToSend)
           await AntiMEV.transferFrom(deployer, user1, tokensToSend)
+          await AntiMEV.approve(deployer, tokensToSend)
 
           await expect(
             AntiMEV.transferFrom(deployer, user1, tokensToSend)
           ).to.be.revertedWith(
-            "AntiMEV: Transfers too frequent, possible sandwich attack"
+            "AntiMEV: Detected sandwich attack, mine more blocks"
           )
         })
 
