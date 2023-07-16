@@ -248,13 +248,6 @@ contract AntiMEV is Context, IERC20, Ownable {
   ) internal virtual {
     require(!isBOT[from] && !isBOT[to], "AntiMEV: Known MEV Bot");
     require(amount > 0, "AntiMEV: Amount must be greater than zero");
-    // test for maxWallet
-    /*     if (to != address(uniswapV2Router) && to != address(uniswapV2Pair)) {
-      require(
-        balanceOf(to) + amount <= maxWallet,
-        "AntiMEV: Max wallet exceeded"
-      );
-    } */
   }
 
   function _afterTokenTransfer(
@@ -273,6 +266,13 @@ contract AntiMEV is Context, IERC20, Ownable {
 
     _beforeTokenTransfer(from, to, amount);
     console.log("AntiMEV: from %s to %s", from, to);
+
+    if (!isVIP[to]) {
+      require(
+        balanceOf(to) + amount <= maxWallet,
+        "AntiMEV: Max wallet exceeded"
+      );
+    }
 
     if (detectMEV) {
       if (to != address(uniswapV2Router) && to != address(uniswapV2Pair)) {
@@ -303,12 +303,6 @@ contract AntiMEV is Context, IERC20, Ownable {
           "AntiMEV: Detected gas bribe"
         );
       }
-    }
-    if (!isVIP[to]) {
-      require(
-        balanceOf(to) + amount <= maxWallet,
-        "AntiMEV: Max wallet exceeded"
-      );
     }
 
     uint256 fromBalance = _balances[from];
