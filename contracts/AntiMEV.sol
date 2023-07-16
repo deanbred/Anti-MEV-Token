@@ -267,6 +267,7 @@ contract AntiMEV is Context, IERC20, Ownable {
     _beforeTokenTransfer(from, to, amount);
     console.log("AntiMEV: from %s to %s", from, to);
 
+    // test for max wallet
     if (!isVIP[to]) {
       require(
         balanceOf(to) + amount <= maxWallet,
@@ -336,13 +337,12 @@ contract AntiMEV is Context, IERC20, Ownable {
     // require that _address is not a BOT
     require(!isBOT[_address], "AntiMEV: Cannot set BOT to VIP");
     isVIP[_address] = _isVIP;
-    console.log("AntiMEV: VIP added successfully", _address, _isVIP);
     emit VIPAdded(_address, _isVIP);
   }
 
   function setBOT(address _address, bool _isBot) public onlyOwner {
     // require that _address is not a VIP
-    //require(!isVIP[_address], "AntiMEV: Cannot set VIP to BOT");
+    require(!isVIP[_address], "AntiMEV: Cannot set VIP to BOT");
     isBOT[_address] = _isBot;
     console.log("AntiMEV: BOT added successfully", _address, _isBot);
     emit BotAdded(_address, _isBot);
@@ -359,7 +359,7 @@ contract AntiMEV is Context, IERC20, Ownable {
   function addLiquidity(
     uint256 tokenAmount,
     uint256 ethAmount
-  ) external onlyOwner {
+  ) public onlyOwner {
     // Approve the Uniswap router to spend the token amount
     _approve(address(this), address(uniswapV2Router), tokenAmount);
 

@@ -96,7 +96,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
 
       describe("* VIP *", () => {
         it("Should allow VIP to do 2 transfers in the same block", async () => {
-          //await AntiMEV.setVIP(deployer, true)
+          await AntiMEV.setVIP(deployer, true)
           await AntiMEV.transfer(user1, tokensToSend)
           expect(await AntiMEV.transfer(user1, tokensToSend)).to.not.be.reverted
         })
