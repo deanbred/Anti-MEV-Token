@@ -11,6 +11,8 @@ tx = await antiMEV.isBOT(deployer)
 tx = await ethers.provider.send("evm_mine", [])
 ethers.provider.blockNumber
 
+tx = await antiMEV.approve(user1, tokensToSend)
+tx = await antiMEV.approve(user2, tokensToSend)
 
 
 tx = await antiMEV.setVIP(deployer, false)
