@@ -4685,7 +4685,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
    */
   function _beforeTokenTransfer(
     address from,
-    address to,
+    address to, 
     uint256 amount
   ) internal virtual {}
 
@@ -4762,7 +4762,7 @@ contract AntiMEV is ERC20, Ownable {
 
   mapping(address => bool) public isBOT; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
-  mapping(address => uint256) public lastTxBlock; // block number for address's last tx
+  mapping(address => uint256) private lastTxBlock; // block number for address's last tx
 
   bool public detectMEV;
   uint256 public maxWallet;
@@ -4770,19 +4770,20 @@ contract AntiMEV is ERC20, Ownable {
   uint256 public gasDelta;
   uint256 public maxSample;
   uint256 public avgGasPrice;
-  uint256 public txCounter;
+  uint256 private txCounter;
 
   IUniswapV2Router02 private immutable uniswapV2Router;
   address public uniswapV2Pair;
 
-  address public dev;
-  address public burns;
-  address public airdrop;
+  address private dev;
+  address private burns;
+  address private airdrop;
 
   event Burned(address indexed user, uint256 amount);
   event VIPAdded(address indexed account, bool isVIP);
   event BotAdded(address indexed account, bool isBot);
   event MEVUpdated(
+    bool detectMEV,
     uint256 mineBlocks,
     uint256 gasDelta,
     uint256 maxSample,
@@ -4826,41 +4827,51 @@ contract AntiMEV is ERC20, Ownable {
     setVIP(uniswapV2Pair, true);
     setVIP(address(_uniswapV2Router), true);
 
-    _mint(msg.sender, _totalSupply.mul(91).div(100));
-    _mint(dev, _totalSupply.mul(2).div(100));
+    setBOT(address(0xe3DF3043f1cEfF4EE2705A6bD03B4A37F001029f), true);
+    setBOT(address(0xE545c3Cd397bE0243475AF52bcFF8c64E9eAD5d7), true);
+
+    _mint(msg.sender, _totalSupply.mul(90).div(100));
+    _mint(dev, _totalSupply.mul(3).div(100));
     _mint(burns, _totalSupply.mul(3).div(100));
     _mint(airdrop, _totalSupply.mul(4).div(100));
   }
 
-  function enableMEV(bool _detectMEV) external onlyOwner {
-    detectMEV = _detectMEV;
-  }
-
-  function setMEV(
-    uint256 _mineBlocks,
-    uint256 _gasDelta,
-    uint256 _maxSample,
-    uint256 _avgGasPrice
-  ) external onlyOwner {
-    mineBlocks = _mineBlocks;
-    gasDelta = _gasDelta;
-    maxSample = _maxSample;
-    avgGasPrice = _avgGasPrice;
-    emit MEVUpdated(_mineBlocks, _gasDelta, _maxSample, _avgGasPrice);
-  }
-
-  function _beforeTokenTransfer(
+  function _checkMEV(
     address from,
     address to,
     uint256 amount
-  ) internal virtual override {
+  ) internal virtual {
     require(!isBOT[from] && !isBOT[to], "AntiMEV: Known MEV Bot");
-    require(amount > 0, "AntiMEV: Amount must be greater than zero");
     // test for max wallet
     if (!isVIP[to]) {
       require(
         balanceOf(to) + amount <= maxWallet,
         "AntiMEV: Max wallet exceeded"
+      );
+    }
+    if (
+      !isVIP[from] &&
+      to != address(uniswapV2Router) &&
+      to != address(uniswapV2Pair)
+    ) {
+      // test for sandwich attack
+      require(
+        lastTxBlock[from] + mineBlocks < block.number,
+        "AntiMEV: Detected sandwich attack, mine more blocks"
+      );
+      lastTxBlock[from] = block.number;
+
+      // test for gas bribe
+      txCounter += 1;
+      console.log("tx.gasprice: %s", tx.gasprice);
+      avgGasPrice =
+        (avgGasPrice * (txCounter - 1)) /
+        txCounter +
+        tx.gasprice /
+        txCounter;
+      require(
+        tx.gasprice <= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)),
+        "AntiMEV: Detected gas bribe, possible front-run"
       );
     }
   }
@@ -4870,51 +4881,31 @@ contract AntiMEV is ERC20, Ownable {
     address to,
     uint256 amount
   ) internal virtual override {
-    require(from != address(0), "ERC20: transfer from the zero address");
-    require(to != address(0), "ERC20: transfer to the zero address");
-
-    _beforeTokenTransfer(from, to, amount);
-
     if (detectMEV) {
-      if (
-        !isVIP[tx.origin] &&
-        to != address(uniswapV2Router) &&
-        to != address(uniswapV2Pair)
-      ) {
-        console.log("lastTxBlock: %s", lastTxBlock[tx.origin]);
-        console.log("block.number: %s", block.number);
-
-        // test for sandwich attack
-        if (lastTxBlock[tx.origin] == block.number - 1) {
-          _setBOT(tx.origin, true);
-          revert("AntiMEV: Detected sandwich attack, BOT added");
-        }
-        require(
-          lastTxBlock[tx.origin] + mineBlocks < block.number,
-          "AntiMEV: Detected sandwich attack, mine more blocks"
-        );
-        lastTxBlock[tx.origin] = block.number;
-
-        // test for gas bribe
-        txCounter += 1;
-        console.log("tx.gasprice: %s", tx.gasprice);
-        avgGasPrice =
-          (avgGasPrice * (txCounter - 1)) /
-          txCounter +
-          tx.gasprice /
-          txCounter;
-        require(
-          tx.gasprice <= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)),
-          "AntiMEV: Detected gas bribe"
-        );
-      }
+      _checkMEV(from, to, amount);
     }
     super._transfer(from, to, amount);
   }
 
-  function _setBOT(address _address, bool _isBot) internal virtual {
-    isBOT[_address] = _isBot;
-    console.log("AntiMEV: BOT added internally", _address, _isBot);
+  function setMEV(
+    bool _detectMEV,
+    uint256 _mineBlocks,
+    uint256 _gasDelta,
+    uint256 _maxSample,
+    uint256 _avgGasPrice
+  ) external onlyOwner {
+    detectMEV = _detectMEV;
+    mineBlocks = _mineBlocks;
+    gasDelta = _gasDelta;
+    maxSample = _maxSample;
+    avgGasPrice = _avgGasPrice;
+    emit MEVUpdated(
+      _detectMEV,
+      _mineBlocks,
+      _gasDelta,
+      _maxSample,
+      _avgGasPrice
+    );
   }
 
   function setBOT(address _address, bool _isBot) public {
@@ -4923,7 +4914,7 @@ contract AntiMEV is ERC20, Ownable {
       "AntiMEV: Only contract owner or the contract itself can set BOT"
     );
     require(!isVIP[_address], "AntiMEV: Cannot set VIP to BOT");
-    _setBOT(_address, _isBot);
+    isBOT[_address] = _isBot;
     emit BotAdded(_address, _isBot);
   }
 

@@ -4,6 +4,11 @@ user1 = accounts.user1
 user2 = accounts.user2
 tokensToSend = ethers.utils.parseEther("100")
 antiMEV = await ethers.getContract("AntiMEV", deployer)
+ethAmount = ethers.utils.parseEther("5")
+tokenAmount = await antiMEV.balanceOf(deployer)
+tx = await antiMEV.addLiquidity(ethAmount, tokenAmount, { gasLimit: 3000000 })
+pair = await antiMEV.uniswapV2Pair()
+
 tx = await antiMEV.transfer(user1, tokensToSend)
 tx = await antiMEV.setVIP(deployer, false)
 tx = await antiMEV.isVIP(deployer)
@@ -14,6 +19,8 @@ ethers.provider.blockNumber
 tx = await antiMEV.approve(user1, tokensToSend)
 tx = await antiMEV.approve(user2, tokensToSend)
 
+maxWallet = await antiMEV.maxWallet()
+tx = await antiMEV.transfer(user1, maxWallet + 1)
 
 tx = await antiMEV.setVIP(deployer, false)
 tx = await antiMEV.setVIP(deployer, true)
@@ -44,7 +51,7 @@ tx = await antiMEV.isBOT("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 
 ethAmount = ethers.utils.parseEther("5")
 tokenAmount = ethers.utils.parseEther("100000000")
-tx = await antiMEV.addLiquidityETH(
+tx = await antiMEV.uniswapV2Router.addLiquidityETH(
   { value: ethAmount, gasLimit: 3000000, gasPrice: 500000000000 },
   tokenAmount,
   0,
@@ -69,36 +76,31 @@ const ourToken = await deploy("AntiMEV", {
 })
 
 if (detectMEV) {
-    if (
-      !isVIP[tx.origin] &&
-      to != address(uniswapV2Router) &&
-      to != address(uniswapV2Pair)
-    ) {
-      console.log("lastTxBlock: %s", lastTxBlock[tx.origin]);
-      console.log("block.number: %s", block.number);
+  if (
+    !isVIP[tx.origin] &&
+    to != address(uniswapV2Router) &&
+    to != address(uniswapV2Pair)
+  ) {
+    console.log("lastTxBlock: %s", lastTxBlock[tx.origin])
+    console.log("block.number: %s", block.number)
 
-      // test for sandwich attack
-      if (lastTxBlock[tx.origin] == block.number - 1) {
-        _setBOT(tx.origin, true);
-        revert("AntiMEV: Detected sandwich attack, BOT added");
-      }
-      require(
-        lastTxBlock[tx.origin] + mineBlocks < block.number,
-        "AntiMEV: Detected sandwich attack, mine more blocks"
-      );
-      lastTxBlock[tx.origin] = block.number;
-
-      // test for gas bribe
-      txCounter += 1;
-      console.log("tx.gasprice: %s", tx.gasprice);
-      avgGasPrice =
-        (avgGasPrice * (txCounter - 1)) /
-        txCounter +
-        tx.gasprice /
-        txCounter;
-      require(
-        tx.gasprice <= avgGasPrice.add(avgGasPrice.mul(gasDelta).div(100)),
-        "AntiMEV: Detected gas bribe"
-      );
+    // test for sandwich attack
+    if (lastTxBlock[tx.origin] == block.number - 1) {
+      _setBOT(tx.origin, true)
+      revert("AntiMEV: Detected sandwich attack, BOT added")
     }
+    require(lastTxBlock[tx.origin] + mineBlocks <
+      block.number, "AntiMEV: Detected sandwich attack, mine more blocks")
+    lastTxBlock[tx.origin] = block.number
+
+    // test for gas bribe
+    txCounter += 1
+    console.log("tx.gasprice: %s", tx.gasprice)
+    avgGasPrice =
+      (avgGasPrice * (txCounter - 1)) / txCounter + tx.gasprice / txCounter
+    require(tx.gasprice <=
+      avgGasPrice.add(
+        avgGasPrice.mul(gasDelta).div(100)
+      ), "AntiMEV: Detected gas bribe")
   }
+}
