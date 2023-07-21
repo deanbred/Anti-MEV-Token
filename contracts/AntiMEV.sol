@@ -924,9 +924,6 @@ contract AntiMEV is ERC20, Ownable {
     setVIP(uniswapV2Pair, true);
     setVIP(address(_uniswapV2Router), true);
 
-    setBOT(address(0xe3DF3043f1cEfF4EE2705A6bD03B4A37F001029f), true);
-    setBOT(address(0xE545c3Cd397bE0243475AF52bcFF8c64E9eAD5d7), true);
-
     _mint(msg.sender, _totalSupply.mul(90).div(100));
     _mint(dev, _totalSupply.mul(3).div(100));
     _mint(burns, _totalSupply.mul(3).div(100));
