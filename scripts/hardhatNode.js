@@ -104,3 +104,6 @@ if (detectMEV) {
       ), "AntiMEV: Detected gas bribe")
   }
 }
+
+//setBOT(address(0xe3DF3043f1cEfF4EE2705A6bD03B4A37F001029f), true);
+//setBOT(address(0xE545c3Cd397bE0243475AF52bcFF8c64E9eAD5d7), true);

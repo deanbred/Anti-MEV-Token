@@ -8,6 +8,7 @@
 
   Telegram: https://t.me/antimev
 */
+
 pragma solidity ^0.8.17;
 
 /**
@@ -432,6 +433,26 @@ interface IERC20Metadata is IERC20 {
   function decimals() external view returns (uint8);
 }
 
+interface IUniswapV2Factory {
+  event PairCreated(
+    address indexed token0,
+    address indexed token1,
+    address pair,
+    uint
+  );
+
+  function createPair(
+    address tokenA,
+    address tokenB
+  ) external returns (address pair);
+}
+
+interface IUniswapV2Router02 {
+  function factory() external pure returns (address);
+
+  function WETH() external pure returns (address);
+}
+
 /**
  * @dev Implementation of the {IERC20} interface.
  *
@@ -690,8 +711,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
     _afterTokenTransfer(from, to, amount);
   }
 
-  /**
-   * @dev Creates `amount` tokens and assigns them to `account`, increasing
+  /** @dev Creates `amount` tokens and assigns them to `account`, increasing
    * the total supply.
    *
    * Emits a {Transfer} event with `from` set to the zero address.
@@ -832,59 +852,14 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
   ) internal virtual {}
 }
 
-interface IUniswapV2Factory {
-  event PairCreated(
-    address indexed token0,
-    address indexed token1,
-    address pair,
-    uint
-  );
-
-  function createPair(
-    address tokenA,
-    address tokenB
-  ) external returns (address pair);
-
-  function getPair(
-    address tokenA,
-    address tokenB
-  ) external view returns (address pair);
-}
-
-interface IUniswapV2Router02 {
-  function factory() external pure returns (address);
-
-  function WETH() external pure returns (address);
-
-  function addLiquidityETH(
-    address token,
-    uint amountTokenDesired,
-    uint amountTokenMin,
-    uint amountETHMin,
-    address to,
-    uint deadline
-  ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
-
-  function removeLiquidityETH(
-    address token,
-    uint liquidity,
-    uint amountTokenMin,
-    uint amountETHMin,
-    address to,
-    uint deadline
-  ) external returns (uint amountToken, uint amountETH);
-}
-
 contract AntiMEV is ERC20, Ownable {
   using SafeMath for uint256;
 
-  mapping(address => uint256) private _balances;
-  mapping(address => mapping(address => uint256)) private _allowances;
-  uint256 private _totalSupply;
+  uint256 public _totalSupply;
 
   mapping(address => bool) public isBOT; // MEV bots
   mapping(address => bool) public isVIP; // VIP addresses
-  mapping(address => uint256) private lastTxBlock; // block number for address's last tx
+  mapping(address => uint256) public lastTxBlock; // block number for address's last tx
 
   bool public detectMEV;
   uint256 public maxWallet;
@@ -892,7 +867,7 @@ contract AntiMEV is ERC20, Ownable {
   uint256 public gasDelta;
   uint256 public maxSample;
   uint256 public avgGasPrice;
-  uint256 private txCounter;
+  uint256 public txCounter;
 
   IUniswapV2Router02 private immutable uniswapV2Router;
   address public uniswapV2Pair;
@@ -922,9 +897,9 @@ contract AntiMEV is ERC20, Ownable {
     maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
     detectMEV = true; // enable MEV detection
     mineBlocks = 3; // blocks to mine before 2nd tx
-    avgGasPrice = 1e9; // initial rolling average gas price
+    avgGasPrice = 1e9; // rolling average gas price
     gasDelta = 25; // increase in gas price to be considered bribe
-    maxSample = 10; // number of blocks to calculate average gas price
+    maxSample = 10; // blocks to calculate average gas price
     txCounter = 0; // counter used to calculate average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
