@@ -897,9 +897,9 @@ contract AntiMEV is ERC20, Ownable {
     maxWallet = _totalSupply.mul(49).div(1000); // 4.9% of total supply
     detectMEV = true; // enable MEV detection
     mineBlocks = 3; // blocks to mine before 2nd tx
-    avgGasPrice = 1e9; // rolling average gas price
+    avgGasPrice = 1e9; // initial rolling average gas price
     gasDelta = 25; // increase in gas price to be considered bribe
-    maxSample = 10; // blocks to calculate average gas price
+    maxSample = 10; // number of blocks to calculate average gas price
     txCounter = 0; // counter used to calculate average gas price
 
     IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(

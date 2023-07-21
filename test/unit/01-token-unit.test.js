@@ -24,7 +24,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
         user2 = accounts.user2
         detectMEV = true
         mineBlocks = 3
-        gasDelta = 20
+        gasDelta = 25
         averageGasPrice = 1e9
         maxSample = 10
         tokensToSend = ethers.utils.parseEther("100")
@@ -160,6 +160,7 @@ const { developmentChains } = require("../../helper-hardhat-config")
               tokensToSend
             )
 
+            await antiMEV.setVIP(deployer, false)
             const transactionReceipt = await transactionResponse.wait()
             const { gasUsed, effectiveGasPrice } = transactionReceipt
             const transferGasCost = gasUsed.mul(effectiveGasPrice)
@@ -172,11 +173,20 @@ const { developmentChains } = require("../../helper-hardhat-config")
         })
 
         it("Should revert if gas bribe is detected", async () => {
-          await antiMEV.setMEV(mineBlocks, gasDelta, maxSample, averageGasPrice)
+          await antiMEV.setMEV(
+            detectMEV,
+            mineBlocks,
+            gasDelta,
+            maxSample,
+            averageGasPrice
+          )
+          console.log(`* detectMEV: ${detectMEV}`)
           console.log(`* mineBlocks: ${mineBlocks}`)
           console.log(`* gasDelta: ${gasDelta}`)
           console.log(`* maxSample: ${maxSample}`)
           console.log(`* averageGasPrice: ${averageGasPrice}`)
+
+          await antiMEV.setVIP(deployer, false)
 
           const transactionResponse = await antiMEV.transfer(
             user1,
@@ -204,7 +214,9 @@ const { developmentChains } = require("../../helper-hardhat-config")
             antiMEV.transfer(user1, tokensToSend, {
               gasPrice: bribe,
             })
-          ).to.be.revertedWith("AntiMEV: Detected gas bribe")
+          ).to.be.revertedWith(
+            "AntiMEV: Detected gas bribe, possible front-run"
+          )
         })
       })
 
