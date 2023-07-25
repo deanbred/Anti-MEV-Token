@@ -21,3 +21,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
 }
 
 module.exports.tags = ["all", "token"]
+
+
+address private _devWallet = 0xc2657176e213DDF18646eFce08F36D656aBE3396;
+address private _burnWallet = 0x8B30998a9492610F074784Aed7aFDd682B23B416;
+address private _airdropWallet = 0xe276d3ea57c5AF859e52d51C2C11f5deCb4C4838;

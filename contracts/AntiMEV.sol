@@ -96,6 +96,7 @@ interface IUniswapV2Router02 {
     ) external payable returns (uint amountToken, uint amountETH, uint liquidity);
 }
 
+
 contract AntiMEV is Context, IERC20, Ownable {
     using SafeMath for uint256;
     mapping (address => uint256) private _balances;
@@ -115,11 +116,7 @@ contract AntiMEV is Context, IERC20, Ownable {
     string private constant _symbol = unicode"AntiMEV";
     uint256 public _maxWalletSize =  _tTotal.mul(49).div(1000); // maxWallet is 4.9% supply
     uint8 private constant _decimals = 18;
-    uint256 private constant _tTotal = 1123581321 * 10**_decimals; // supply is Fibonnaci
-
-    address private _devWallet = 0xc2657176e213DDF18646eFce08F36D656aBE3396;
-    address private _burnWallet = 0x8B30998a9492610F074784Aed7aFDd682B23B416;
-    address private _airdropWallet = 0xe276d3ea57c5AF859e52d51C2C11f5deCb4C4838;
+    uint256 private constant _tTotal = 1123581321 * 10**_decimals; // supply is Fibonnaci sequence
 
     IUniswapV2Router02 private uniswapV2Router;
     address public uniswapV2Pair;
